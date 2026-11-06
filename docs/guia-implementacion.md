@@ -945,14 +945,25 @@ La fase se ejecutó en tres entregas:
 - La exportación CSV requiere `php artisan queue:work`; sin worker queda en `queued`.
 
 
-### Fase 6 — Endurecimiento y piloto
+### Fase 6 — Endurecimiento y piloto (en curso)
 
-- [ ] Pruebas de carga con k6.
-- [ ] Pruebas de caos: Redis, Reverb, impresora.
-- [ ] Revisión de seguridad y permisos.
-- [ ] Respaldos y restauración ensayados.
-- [ ] Runbooks.
-- [ ] UAT y piloto en una sola sección.
+- [x] Escenarios de carga con k6 en `tests/load/` (emisión, pantallas y consola).
+  **Pendiente:** ejecutarlos en staging y registrar resultados.
+- [x] Revisión de seguridad y permisos en `docs/seguridad.md`, con correcciones
+  de límites de tasa, cabeceras de seguridad e inyección de fórmulas en CSV.
+- [x] Respaldos: `scripts/backup.sh` y `scripts/backup.ps1`; el respaldo de
+  Windows se probó localmente el 2026-11-06 con un volcado válido de 36 tablas.
+  **Pendiente:** ensayo formal de restauración en una base temporal.
+- [x] Runbook de operación en `docs/runbook-operacion.md`.
+- [x] Plan de UAT y piloto en `docs/piloto-uat.md`.
+- [x] Comando `php artisan tickets:health` para verificaciones previas al piloto.
+- [ ] Pruebas de caos: Reverb, cola y impresora. Los procedimientos están en el
+  runbook y las pruebas automatizadas cubren la degradación de Reverb y la
+  emisión cuando falla el broadcast. **Pendiente:** ejecución de los simulacros
+  en staging. Redis no es dependencia obligatoria con la configuración actual
+  (`CACHE_STORE=database`, `QUEUE_CONNECTION=database`); si se habilita, probar
+  también su caída.
+- [ ] UAT y piloto real en una sola sección. **Pendiente:** ejecución y firma.
 
 **Salida:** piloto aprobado y plan de habilitación de las otras dos secciones.
 
@@ -997,7 +1008,7 @@ La fase se ejecutó en tres entregas:
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 5: **159 pruebas, 722 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 6: **167 pruebas, 757 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
@@ -1169,7 +1180,7 @@ Decisiones adoptadas al implementar la Fase 4:
 8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado, transferencia, reimpresión y fallo de impresión.
 9. ~~Implementar prioridades configurables 2:1, aging, servicios exclusivos, autorización por servicio y autenticación (Fase 4).~~ Completado el 2026-11-06: 127 pruebas en verde (T-PRIO, T-SVC y T-AUTH) y smoke test de `/login`, `/quiosco`, `/pantalla`, `/consola`, `/admin/ajustes`, prioridades, servicios y simulador.
 10. ~~Implementar la Fase 5: administración completa, reportes, retención, multimedia y anuncio por voz.~~ Completado el 2026-11-06 en tres entregas: 5A (`f95d465`), 5B (`ebbcaea`) y 5C (multimedia, pantallas y voz). Suite final: 159 pruebas y 722 aserciones.
-11. Iniciar la Fase 6: pruebas de carga, caos, seguridad, respaldos, runbooks y piloto en una sola sección.
+11. ~~Iniciar la Fase 6: pruebas de carga, caos, seguridad, respaldos, runbooks y piloto en una sola sección.~~ Artefactos completados el 2026-11-06: escenarios k6, revisión de seguridad, scripts de respaldo, runbook, plan de UAT/piloto y comando `tickets:health`. **Pendiente de ejecución:** cargas en staging, simulacros de caos, ensayo de restauración, UAT y piloto real.
 
 ---
 
@@ -1195,7 +1206,10 @@ Decisiones adoptadas al implementar la Fase 4:
 | La API responde `401` o `403` | Sesión ausente, usuario inactivo o rol insuficiente | Verificar `/login`, `is_active` y el rol del usuario |
 | No aparece el usuario de demostración | `APP_ENV` no es `local` | Ejecutar con `APP_ENV=local` o crear el usuario manualmente |
 | Un operador no recibe tickets de un servicio | No está autorizado para ese servicio | Asignarlo en `/admin/servicios` o en `service_user` |
+| La API pública responde `429` | Límite de tasa por IP alcanzado | Ajustar `TICKETS_RATE_LIMIT_*` o esperar al siguiente minuto |
+| No se sabe si el sistema está sano | Faltan verificaciones previas | Ejecutar `php artisan tickets:health` y revisar el runbook |
+| No hay respaldo del día | No se ejecutó el script | Ejecutar `scripts/backup.ps1` o `scripts/backup.sh`; ver `docs/runbook-operacion.md` |
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 a 4 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La consola y la administración ya exigen autenticación; el quiosco y la pantalla siguen siendo públicos. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06. Las fases 1 a 5 están completadas; la Fase 6 tiene los artefactos de endurecimiento listos (cargas k6, revisión de seguridad, respaldos, runbook y plan de UAT/piloto), pero **las pruebas de carga, los simulacros de caos, el ensayo de restauración y el piloto aún no se ejecutaron**. La suite automatizada está en verde; no se ha validado el sistema en operación real ni con impresoras físicas. El quiosco y la pantalla siguen siendo públicos. Cualquier avance debe reflejarse aquí, en `docs/seguridad.md`, `docs/runbook-operacion.md` y `docs/piloto-uat.md`.

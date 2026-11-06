@@ -25,13 +25,19 @@ use App\Http\Controllers\Api\V1\TicketController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
-    Route::get('sections', [SectionController::class, 'index'])->name('sections.index');
-    Route::get('sections/{section:slug}', [SectionController::class, 'show'])->name('sections.show');
-    Route::get('kiosks/{kioskDevice:token}', [PublicKioskController::class, 'show'])->name('kiosks.show');
+    Route::middleware('throttle:public-catalog')->group(function (): void {
+        Route::get('sections', [SectionController::class, 'index'])->name('sections.index');
+        Route::get('sections/{section:slug}', [SectionController::class, 'show'])->name('sections.show');
+        Route::get('kiosks/{kioskDevice:token}', [PublicKioskController::class, 'show'])->name('kiosks.show');
+    });
 
-    Route::post('tickets', [TicketController::class, 'store'])->name('tickets.store');
+    Route::post('tickets', [TicketController::class, 'store'])
+        ->middleware('throttle:public-tickets')
+        ->name('tickets.store');
 
-    Route::get('display/snapshot', [DisplayController::class, 'snapshot'])->name('display.snapshot');
+    Route::get('display/snapshot', [DisplayController::class, 'snapshot'])
+        ->middleware('throttle:public-display')
+        ->name('display.snapshot');
 
     Route::middleware(['auth', 'active'])->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');

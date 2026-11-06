@@ -68,7 +68,7 @@ final class TicketCsvWriter
      */
     public function row(Ticket $ticket): array
     {
-        return [
+        $row = [
             $ticket->id,
             $ticket->label,
             $ticket->section?->name,
@@ -91,6 +91,25 @@ final class TicketCsvWriter
             $this->secondsBetween($ticket->started_at, $ticket->finished_at),
             $this->secondsBetween($ticket->issued_at, $ticket->closed_at),
         ];
+
+        return array_map(
+            fn (string|int|null $value): string|int|null => $this->neutralizeFormula($value),
+            $row,
+        );
+    }
+
+    /**
+     * Evita la ejecución de fórmulas al abrir el CSV en una hoja de cálculo.
+     */
+    private function neutralizeFormula(string|int|null $value): string|int|null
+    {
+        if (! is_string($value) || $value === '') {
+            return $value;
+        }
+
+        return preg_match('/^[=+\-@\t\r]/', $value) === 1
+            ? "'{$value}"
+            : $value;
     }
 
     private function secondsBetween(mixed $from, mixed $to): int|string

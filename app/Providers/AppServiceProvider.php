@@ -33,6 +33,24 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        RateLimiter::for('public-catalog', function (Request $request): Limit {
+            return Limit::perMinute(
+                (int) config('tickets.rate_limits.catalog_per_minute'),
+            )->by($request->ip());
+        });
+
+        RateLimiter::for('public-tickets', function (Request $request): Limit {
+            return Limit::perMinute(
+                (int) config('tickets.rate_limits.tickets_per_minute'),
+            )->by($request->ip());
+        });
+
+        RateLimiter::for('public-display', function (Request $request): Limit {
+            return Limit::perMinute(
+                (int) config('tickets.rate_limits.display_per_minute'),
+            )->by($request->ip());
+        });
+
         Gate::policy(Ticket::class, TicketPolicy::class);
 
         Gate::before(function (User $user, string $ability): ?bool {
