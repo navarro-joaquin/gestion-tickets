@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('tickets:no-show')->everyMinute()->withoutOverlapping();
 Schedule::command('tickets:day:close')->everyMinute()->withoutOverlapping();
+Schedule::command('tickets:purge')->dailyAt('03:00')->withoutOverlapping();

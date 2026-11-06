@@ -4,6 +4,7 @@ import { api, type PriorityProfilePayload, type ServicePayload } from '../../sha
 import AuditPanel from './components/AuditPanel.vue';
 import KiosksPanel from './components/KiosksPanel.vue';
 import PrintersPanel from './components/PrintersPanel.vue';
+import ReportsPanel from './components/ReportsPanel.vue';
 import SectionsPanel from './components/SectionsPanel.vue';
 import StationsPanel from './components/StationsPanel.vue';
 import UsersPanel from './components/UsersPanel.vue';
@@ -17,7 +18,7 @@ import type {
     SimulatedQueue,
 } from '../../shared/types/api';
 
-type Tab = 'settings' | 'priorities' | 'services' | 'simulator' | 'sections' | 'stations' | 'users' | 'kiosks' | 'printers' | 'audit';
+type Tab = 'settings' | 'priorities' | 'services' | 'simulator' | 'sections' | 'stations' | 'users' | 'kiosks' | 'printers' | 'audit' | 'reports';
 
 interface ProfileForm {
     name: string;
@@ -57,6 +58,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'kiosks', label: 'Quioscos' },
     { id: 'printers', label: 'Impresoras' },
     { id: 'audit', label: 'Auditoría' },
+    { id: 'reports', label: 'Reportes' },
     { id: 'simulator', label: 'Simulador' },
 ];
 
@@ -65,6 +67,7 @@ const currentUser = ref<AuthUser | null>(null);
 
 const settings = ref<AdminSettings | null>(null);
 const closingTime = ref('16:30');
+const retentionMonths = ref(12);
 
 const profiles = ref<PriorityProfile[]>([]);
 const editingProfileId = ref<number | null>(null);
@@ -138,6 +141,7 @@ async function loadSettings(): Promise<void> {
         const response = await api.adminSettings();
         settings.value = response.data;
         closingTime.value = response.data.closing_time;
+        retentionMonths.value = response.data.retention_months;
     } catch (exception) {
         error.value = describeError(exception);
     }
@@ -193,9 +197,10 @@ async function saveSettings(): Promise<void> {
     error.value = '';
 
     try {
-        const response = await api.updateAdminSettings(closingTime.value);
+        const response = await api.updateAdminSettings(closingTime.value, retentionMonths.value);
         settings.value = response.data;
         closingTime.value = response.data.closing_time;
+        retentionMonths.value = response.data.retention_months;
         message.value = response.message;
     } catch (exception) {
         error.value = describeError(exception);
@@ -508,10 +513,11 @@ function describeError(exception: unknown): string {
             </p>
 
             <section v-if="activeTab === 'settings'" class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
-                <h2 class="text-xl font-semibold">Cierre de jornada</h2>
+                <h2 class="text-xl font-semibold">Cierre de jornada y retención</h2>
                 <p class="mt-2 text-sm text-slate-400">
                     A esta hora se expiran los tickets en espera, se marcan como no presentados
-                    los llamados sin atención y se finalizan los que estaban en atención.
+                    los llamados sin atención y se finalizan los que estaban en atención. Los
+                    tickets cerrados se archivan y eliminan al superar la retención.
                 </p>
 
                 <div class="mt-8 flex flex-wrap items-end gap-4">
@@ -521,6 +527,17 @@ function describeError(exception: unknown): string {
                             v-model="closingTime"
                             type="time"
                             step="60"
+                            class="w-40 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-lg text-slate-100"
+                        >
+                    </label>
+
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Retención (meses)
+                        <input
+                            v-model.number="retentionMonths"
+                            type="number"
+                            min="1"
+                            max="120"
                             class="w-40 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-lg text-slate-100"
                         >
                     </label>
@@ -823,6 +840,7 @@ function describeError(exception: unknown): string {
             <KiosksPanel v-else-if="activeTab === 'kiosks'" />
             <PrintersPanel v-else-if="activeTab === 'printers'" />
             <AuditPanel v-else-if="activeTab === 'audit'" />
+            <ReportsPanel v-else-if="activeTab === 'reports'" />
         </div>
     </main>
 </template>

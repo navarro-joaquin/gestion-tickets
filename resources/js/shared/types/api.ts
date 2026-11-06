@@ -190,6 +190,7 @@ export interface AdminSettings {
     closing_time: string;
     next_closing_at: string;
     timezone: string;
+    retention_months: number;
 }
 
 export interface PriorityProfile {
@@ -344,4 +345,107 @@ export interface Paginated<T> {
         to: number | null;
         total: number;
     };
+}
+
+export interface ReportFiltersPayload {
+    from?: string;
+    to?: string;
+    section?: string;
+    category?: string;
+    service?: string;
+    station?: string;
+}
+
+export interface ReportTotals {
+    issued: number;
+    waiting: number;
+    called: number;
+    in_service: number;
+    finished: number;
+    no_show: number;
+    cancelled: number;
+    expired: number;
+    avg_wait_seconds: number | null;
+    avg_service_seconds: number | null;
+    avg_total_seconds: number | null;
+}
+
+export interface ReportGroupRow {
+    issued: number;
+    finished: number;
+    no_show: number;
+    expired: number;
+    cancelled: number;
+    avg_wait_seconds: number | null;
+    avg_service_seconds: number | null;
+}
+
+export interface ReportSectionRow extends ReportGroupRow {
+    section: {
+        id: number;
+        slug: string;
+        name: string;
+    };
+}
+
+export interface ReportCategoryRow extends ReportGroupRow {
+    category: {
+        id: number;
+        slug: string;
+        name: string;
+        is_preferential: boolean;
+    };
+}
+
+export interface ReportServiceRow extends ReportGroupRow {
+    service: {
+        id: number | null;
+        slug: string | null;
+        name: string | null;
+        label: string | null;
+    };
+}
+
+export interface ReportStationRow extends ReportGroupRow {
+    station_label: string | null;
+}
+
+export interface ReportSummary {
+    period: {
+        from: string;
+        to: string;
+    };
+    filters: {
+        from: string;
+        to: string;
+        section: string | null;
+        category: string | null;
+        service: string | null;
+        station: string | null;
+    };
+    totals: ReportTotals;
+    by_section: ReportSectionRow[];
+    by_category: ReportCategoryRow[];
+    by_service: ReportServiceRow[];
+    by_station: ReportStationRow[];
+}
+
+export interface ReportExport {
+    id: number;
+    type: string;
+    format: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    status_label: string;
+    filters: ReportFiltersPayload;
+    rows: number;
+    file_size: number | null;
+    error: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string | null;
+    user?: {
+        id: number;
+        name: string;
+    } | null;
+    download_url?: string;
 }

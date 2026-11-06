@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AdminKioskDeviceController;
 use App\Http\Controllers\Api\V1\AdminPrinterController;
+use App\Http\Controllers\Api\V1\AdminReportController;
 use App\Http\Controllers\Api\V1\AdminSectionController;
 use App\Http\Controllers\Api\V1\AdminSettingsController;
 use App\Http\Controllers\Api\V1\AdminStationController;
@@ -70,6 +71,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::apiResource('printers', AdminPrinterController::class)
                 ->only(['index', 'store', 'update', 'destroy']);
             Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+
+            Route::get('reports/summary', [AdminReportController::class, 'summary'])->name('reports.summary');
+            Route::get('reports/tickets', [AdminReportController::class, 'tickets'])->name('reports.tickets');
+            Route::get('reports/exports', [AdminReportController::class, 'exports'])->name('reports.exports.index');
+            Route::post('reports/exports', [AdminReportController::class, 'storeExport'])->name('reports.exports.store');
+            Route::get('reports/exports/{export}/download', [AdminReportController::class, 'download'])->name('reports.exports.download');
+            Route::delete('reports/exports/{export}', [AdminReportController::class, 'destroyExport'])->name('reports.exports.destroy');
 
             Route::apiResource('priority-profiles', PriorityProfileController::class)
                 ->parameters(['priority-profiles' => 'priorityProfile']);

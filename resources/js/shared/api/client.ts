@@ -15,6 +15,9 @@ import type {
     Printer,
     PriorityProfile,
     PublicKiosk,
+    ReportExport,
+    ReportFiltersPayload,
+    ReportSummary,
     Section,
     Service,
     SimulatedQueue,
@@ -182,10 +185,13 @@ export const api = {
         return request('/admin/settings');
     },
 
-    updateAdminSettings(closingTime: string): Promise<{ data: AdminSettings; message: string }> {
+    updateAdminSettings(closingTime: string, retentionMonths?: number): Promise<{ data: AdminSettings; message: string }> {
         return request('/admin/settings', {
             method: 'PUT',
-            body: JSON.stringify({ closing_time: closingTime }),
+            body: JSON.stringify({
+                closing_time: closingTime,
+                retention_months: retentionMonths,
+            }),
         });
     },
 
@@ -404,6 +410,31 @@ export const api = {
 
         return request(`/admin/audit-logs${suffix ? `?${suffix}` : ''}`);
     },
+
+    reportSummary(filters: ReportFiltersPayload): Promise<{ data: ReportSummary }> {
+        return request(`/admin/reports/summary${buildQuery({ ...filters })}`);
+    },
+
+    reportTickets(
+        filters: ReportFiltersPayload & { page?: number; per_page?: number },
+    ): Promise<Paginated<Ticket>> {
+        return request(`/admin/reports/tickets${buildQuery({ ...filters })}`);
+    },
+
+    reportExports(): Promise<Paginated<ReportExport>> {
+        return request('/admin/reports/exports');
+    },
+
+    createReportExport(filters: ReportFiltersPayload): Promise<{ data: ReportExport; message: string }> {
+        return request('/admin/reports/exports', {
+            method: 'POST',
+            body: JSON.stringify(filters),
+        });
+    },
+
+    deleteReportExport(id: number): Promise<{ message: string }> {
+        return request(`/admin/reports/exports/${id}`, { method: 'DELETE' });
+    },
 };
 
 export interface PriorityProfilePayload {
@@ -484,4 +515,18 @@ export interface AuditLogFilters {
     entity_type?: string;
     page?: number;
     per_page?: number;
+}
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+    const query = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== '') {
+            query.set(key, String(value));
+        }
+    }
+
+    const suffix = query.toString();
+
+    return suffix ? `?${suffix}` : '';
 }

@@ -17,8 +17,9 @@ class AdminSettingsApiTest extends TestCase
             ->assertJsonPath('data.closing_time', '16:30')
             ->assertJsonPath('data.timezone', 'America/La_Paz')
             ->assertJsonStructure([
-                'data' => ['closing_time', 'next_closing_at', 'timezone'],
-            ]);
+                'data' => ['closing_time', 'next_closing_at', 'timezone', 'retention_months'],
+            ])
+            ->assertJsonPath('data.retention_months', 12);
     }
 
     public function test_update_persists_the_closing_time(): void
@@ -29,7 +30,7 @@ class AdminSettingsApiTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.closing_time', '18:45')
-            ->assertJsonPath('message', 'Hora de cierre actualizada.');
+            ->assertJsonPath('message', 'Configuración actualizada.');
 
         $this->assertSame('18:45', app(DayClosingSchedule::class)->closingTime());
 

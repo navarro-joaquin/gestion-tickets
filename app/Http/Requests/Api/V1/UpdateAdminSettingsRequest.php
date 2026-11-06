@@ -18,6 +18,7 @@ class UpdateAdminSettingsRequest extends FormRequest
     {
         return [
             'closing_time' => ['required', 'string', 'date_format:H:i'],
+            'retention_months' => ['sometimes', 'integer', 'between:1,120'],
         ];
     }
 }
