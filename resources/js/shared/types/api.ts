@@ -68,3 +68,9 @@ export interface DisplaySnapshot {
     }>;
     updated_at: string;
 }
+
+export interface AdminSettings {
+    closing_time: string;
+    next_closing_at: string;
+    timezone: string;
+}

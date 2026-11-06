@@ -16,7 +16,7 @@ final class CloseTicketDay
     public function __construct(private readonly QueueNotifier $notifier) {}
 
     /**
-     * @return array{expired: int, finished: int}
+     * @return array{expired: int, no_show: int, finished: int}
      */
     public function handle(?CarbonInterface $moment = null): array
     {
@@ -24,12 +24,14 @@ final class CloseTicketDay
         $periodKey = $now->toDateString();
         $affectedSections = [];
         $expired = 0;
+        $noShow = 0;
         $finished = 0;
 
-        DB::transaction(function () use ($now, $periodKey, &$affectedSections, &$expired, &$finished): void {
+        DB::transaction(function () use ($now, $periodKey, &$affectedSections, &$expired, &$noShow, &$finished): void {
             $waitingTickets = Ticket::query()
                 ->where('status', TicketStatus::Waiting)
                 ->where('period_key', $periodKey)
+                ->with('section:id,slug')
                 ->lockForUpdate()
                 ->get();
 
@@ -50,13 +52,45 @@ final class CloseTicketDay
                 $expired++;
             }
 
-            $activeTickets = Ticket::query()
-                ->whereIn('status', [TicketStatus::Called, TicketStatus::InService])
+            $calledTickets = Ticket::query()
+                ->where('status', TicketStatus::Called)
                 ->where('period_key', $periodKey)
+                ->with('section:id,slug')
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($activeTickets as $ticket) {
+            foreach ($calledTickets as $ticket) {
+                $ticket->update([
+                    'status' => TicketStatus::NoShow,
+                    'closed_at' => $now,
+                ]);
+
+                $ticket->assignments()
+                    ->whereNull('released_at')
+                    ->update(['released_at' => $now]);
+
+                TicketEvent::query()->create([
+                    'ticket_id' => $ticket->id,
+                    'type' => TicketEventType::NoShow,
+                    'occurred_at' => $now,
+                    'payload' => [
+                        'reason' => 'cierre de jornada',
+                        'call_count' => $ticket->call_count,
+                    ],
+                ]);
+
+                $affectedSections[$ticket->section->slug] = true;
+                $noShow++;
+            }
+
+            $inServiceTickets = Ticket::query()
+                ->where('status', TicketStatus::InService)
+                ->where('period_key', $periodKey)
+                ->with('section:id,slug')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($inServiceTickets as $ticket) {
                 $ticket->update([
                     'status' => TicketStatus::Finished,
                     'finished_at' => $now,
@@ -83,6 +117,6 @@ final class CloseTicketDay
             $this->notifier->notify($slug);
         }
 
-        return ['expired' => $expired, 'finished' => $finished];
+        return ['expired' => $expired, 'no_show' => $noShow, 'finished' => $finished];
     }
 }

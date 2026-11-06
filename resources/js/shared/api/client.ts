@@ -1,4 +1,5 @@
 import type {
+    AdminSettings,
     ConsoleQueue,
     DisplaySnapshot,
     IssuedTicketResponse,
@@ -78,5 +79,16 @@ export const api = {
 
     snapshot(): Promise<DisplaySnapshot> {
         return request('/display/snapshot');
+    },
+
+    adminSettings(): Promise<{ data: AdminSettings }> {
+        return request('/admin/settings');
+    },
+
+    updateAdminSettings(closingTime: string): Promise<{ data: AdminSettings; message: string }> {
+        return request('/admin/settings', {
+            method: 'PUT',
+            body: JSON.stringify({ closing_time: closingTime }),
+        });
     },
 };

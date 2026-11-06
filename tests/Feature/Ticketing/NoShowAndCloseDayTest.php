@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Ticketing;
 
+use App\Domain\Settings\DayClosingSchedule;
 use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Actions\RecallTicket;
 use App\Domain\Ticketing\Actions\StartTicket;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketStatus;
+use Carbon\Carbon;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
@@ -72,7 +74,7 @@ class NoShowAndCloseDayTest extends TestCase
         $this->assertSame(TicketStatus::Called, $called->fresh()->status);
     }
 
-    public function test_close_day_expires_waiting_tickets_and_finishes_active_tickets(): void
+    public function test_close_day_expires_waiting_tickets_marks_called_as_no_show_and_finishes_in_service(): void
     {
         $this->seedMatrix();
         $issue = app(IssueTicket::class);
@@ -87,16 +89,27 @@ class NoShowAndCloseDayTest extends TestCase
 
         $waiting = $issue->handle('plataforma', 'general');
 
-        $this->artisan('tickets:day:close')->assertExitCode(0);
+        $this->artisan('tickets:day:close', ['--force' => true])->assertExitCode(0);
 
         $this->assertSame(TicketStatus::Finished, $inService->fresh()->status);
-        $this->assertSame(TicketStatus::Finished, $called->fresh()->status);
+        $this->assertSame(TicketStatus::NoShow, $called->fresh()->status);
         $this->assertSame(TicketStatus::Expired, $waiting->fresh()->status);
+        $this->assertNotNull($inService->fresh()->closed_at);
+        $this->assertNotNull($called->fresh()->closed_at);
         $this->assertNotNull($waiting->fresh()->closed_at);
         $this->assertSame(0, $called->assignments()->whereNull('released_at')->count());
+        $this->assertSame(0, $inService->assignments()->whereNull('released_at')->count());
         $this->assertDatabaseHas('ticket_events', [
             'ticket_id' => $waiting->id,
             'type' => 'expired',
+        ]);
+        $this->assertDatabaseHas('ticket_events', [
+            'ticket_id' => $called->id,
+            'type' => 'no_show',
+        ]);
+        $this->assertDatabaseHas('ticket_events', [
+            'ticket_id' => $inService->id,
+            'type' => 'finished',
         ]);
     }
 
@@ -109,8 +122,56 @@ class NoShowAndCloseDayTest extends TestCase
             'status' => TicketStatus::Waiting,
         ]);
 
-        $this->artisan('tickets:day:close')->assertExitCode(0);
+        $this->artisan('tickets:day:close', ['--force' => true])->assertExitCode(0);
 
         $this->assertSame(TicketStatus::Waiting, $yesterdayTicket->fresh()->status);
+    }
+
+    public function test_close_day_waits_for_the_configured_time(): void
+    {
+        $this->seedMatrix();
+
+        $schedule = app(DayClosingSchedule::class);
+        $schedule->setClosingTime('18:00');
+
+        $this->travelTo(Carbon::parse('2026-11-06 17:59:00'));
+
+        $waiting = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->artisan('tickets:day:close')->assertExitCode(0);
+
+        $this->assertSame(TicketStatus::Waiting, $waiting->fresh()->status);
+    }
+
+    public function test_close_day_runs_at_the_configured_time_without_force(): void
+    {
+        $this->seedMatrix();
+
+        $schedule = app(DayClosingSchedule::class);
+        $schedule->setClosingTime('18:00');
+
+        $this->travelTo(Carbon::parse('2026-11-06 18:00:00'));
+
+        $waiting = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->artisan('tickets:day:close')->assertExitCode(0);
+
+        $this->assertSame(TicketStatus::Expired, $waiting->fresh()->status);
+    }
+
+    public function test_force_flag_closes_the_day_before_the_configured_time(): void
+    {
+        $this->seedMatrix();
+
+        $schedule = app(DayClosingSchedule::class);
+        $schedule->setClosingTime('18:00');
+
+        $this->travelTo(Carbon::parse('2026-11-06 10:00:00'));
+
+        $waiting = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->artisan('tickets:day:close', ['--force' => true])->assertExitCode(0);
+
+        $this->assertSame(TicketStatus::Expired, $waiting->fresh()->status);
     }
 }

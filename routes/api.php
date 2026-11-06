@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminSettingsController;
 use App\Http\Controllers\Api\V1\ConsoleController;
 use App\Http\Controllers\Api\V1\DisplayController;
 use App\Http\Controllers\Api\V1\SectionController;
@@ -19,4 +20,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::post('console/tickets/{ticket}/finish', [ConsoleController::class, 'finish'])->name('console.finish');
 
     Route::get('display/snapshot', [DisplayController::class, 'snapshot'])->name('display.snapshot');
+
+    Route::get('admin/settings', [AdminSettingsController::class, 'show'])->name('admin.settings.show');
+    Route::put('admin/settings', [AdminSettingsController::class, 'update'])->name('admin.settings.update');
 });

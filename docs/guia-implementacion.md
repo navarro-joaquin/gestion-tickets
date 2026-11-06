@@ -26,10 +26,10 @@ Esta guía describe el estado real del repositorio. A la fecha están implementa
 | Docker Compose | 5.5.1 |
 | Node.js / npm | 24.19.0 / 12.0.2 |
 | Laravel Boost | 2.10.4 (dev) |
-| Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk` y `console` |
+| Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk`, `console` y `admin` |
 | Redis / Reverb / Echo | Reverb instalado (`dev-main`) y Echo/Pusher JS en el frontend; Redis no habilitado todavía |
-| Módulos de dominio | Fases 1 y 2: matriz de códigos y núcleo de tickets |
-| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events` |
+| Módulos de dominio | Fases 1 y 2: matriz de códigos y núcleo de tickets; ajuste de hora de cierre en administración |
+| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events`, `settings` |
 
 ### Archivos relevantes creados
 
@@ -41,23 +41,25 @@ gestion-tickets/
 ├── app/
 │   ├── Domain/
 │   │   ├── Sections/             # Fase 1: secciones, categorías, matriz y gate
+│   │   ├── Settings/             # Hora de cierre configurable
 │   │   └── Ticketing/            # Fase 2: modelos, acciones y formateador ESC/POS
 │   ├── Console/Commands/         # tickets:no-show, tickets:day:close
 │   ├── Events/TicketQueueChanged.php
 │   └── Http/
-│       ├── Controllers/Api/V1/   # SectionController, Ticket, Console, Display
+│       ├── Controllers/Api/V1/   # Section, Ticket, Console, Display, AdminSettings
 │       ├── Requests/Api/V1/
 │       └── Resources/TicketResource.php
 ├── database/
-│   ├── migrations/               # Fase 1 + Fase 2
+│   ├── migrations/               # Fase 1 + Fase 2 + settings
 │   ├── factories/Domain/Ticketing/
 │   └── seeders/                  # CategorySeeder, SectionSeeder
 ├── resources/
 │   ├── js/
 │   │   ├── apps/kiosk/           # Quiosco Vue 3
 │   │   ├── apps/console/         # Consola Vue 3
+│   │   ├── apps/admin/           # Administración: hora de cierre
 │   │   └── shared/               # API, tipos, Echo e impresión
-│   └── views/                    # kiosk.blade.php, console.blade.php
+│   └── views/                    # kiosk, console y admin (Blade)
 ├── routes/
 │   ├── api.php                   # API v1
 │   ├── channels.php              # Canal sections.{slug}
@@ -492,6 +494,17 @@ Detalles críticos ya implementados en la Fase 2:
 - `ticket_events` append-only; `audit_logs` queda para la Fase 5.
 - `section_id` representa la sección de origen; `current_section_id` y la transferencia llegan en la Fase 3.
 
+### 9.10 `settings`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `key` | varchar(100) | único; por ejemplo `tickets.day_closing_time` |
+| `value` | text nullable | valor serializado como texto |
+| `timestamps` | — | — |
+
+Almacén clave-valor para configuración global. La hora de cierre se guarda como `HH:MM` en `tickets.day_closing_time`; si no existe o es inválida, el sistema usa `16:30`. La zona horaria es la de la aplicación (`America/La_Paz`).
+
 ---
 
 ## 10. Estructura de carpetas objetivo
@@ -608,7 +621,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - `CallNextTicket`: bloquea la sección, impide dos tickets activos por ventanilla u operador, toma el ticket en espera más antiguo y registra asignación y evento.
   - `RecallTicket`: máximo 2 llamados; cierra la asignación anterior y crea una nueva de motivo `recalled`.
   - `StartTicket`, `FinishTicket`, `MarkTicketNoShow`: transiciones de estado con evento y liberación de asignación.
-  - `CloseTicketDay`: expira los tickets en espera y finaliza los activos de la jornada.
+  - `CloseTicketDay`: expira los tickets en espera, marca como no presentados los llamados sin atención y finaliza los que estaban en atención.
 - `QueueNotifier` y evento `TicketQueueChanged` (`ShouldBroadcastNow`) en el canal `sections.{slug}` con evento `.queue.changed`. Los fallos de broadcast se capturan y no rompen la operación.
 - Impresión `EscPosTicketFormatter`: payload ESC/POS en CP850 con inicialización, tamaño doble, alimentación y corte; el endpoint devuelve `print.escpos_base64` y `print.text`.
 - API v1:
@@ -617,20 +630,24 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - `POST /api/v1/console/tickets/next` → siguiente ticket; `data: null` si la cola está vacía.
   - `POST /api/v1/console/tickets/{ticket}/recall|start|finish`.
   - `GET /api/v1/display/snapshot` → secciones activas, contador y llamados en curso.
+  - `GET /api/v1/admin/settings` → hora de cierre, próximo cierre y zona horaria.
+  - `PUT /api/v1/admin/settings` → actualiza `closing_time` (`HH:MM`).
 - Comandos y scheduler:
   - `php artisan tickets:no-show`: cada minuto; cierra como no presentado tras 2 llamados y 1 minuto desde el último.
-  - `php artisan tickets:day:close`: diario a las 16:30; expira en espera y finaliza activos.
+  - `php artisan tickets:day:close`: se evalúa cada minuto y ejecuta cuando la hora local alcanza la hora configurada (por defecto `16:30`). Acepta `--force` para ejecutar el cierre de inmediato.
+  - Al cierre: los tickets en espera pasan a `expired`, los llamados sin atención a `no_show` y los que estaban en atención a `finished`.
 - Frontend:
   - `resources/js/apps/kiosk/`: selector de sección, categorías derivadas de la matriz y emisión con impresión.
   - `resources/js/apps/console/`: selección de sección/ventanilla, ticket activo, llamar, rellamar, iniciar y finalizar; polling cada 5 s y suscripción a Echo si Reverb está configurado.
+  - `resources/js/apps/admin/`: ajuste de la hora de cierre y visualización del próximo cierre.
   - Cliente API y tipos compartidos en `resources/js/shared/`.
   - Adaptador de impresión con drivers `local` (HTTP a `VITE_PRINT_SERVICE_URL`) y `qz` (QZ Tray).
-- Rutas Blade `/quiosco` y `/consola`; Vite con entradas múltiples.
-- Pruebas: **58 pruebas, 182 aserciones en verde**, incluidas T-SEQ, T-CONC (6 procesos × 5 tickets = 30 números únicos) y flujo completo por API.
+- Rutas Blade `/quiosco`, `/consola` y `/admin/ajustes`; Vite con entradas múltiples.
+- Pruebas: **71 pruebas, 226 aserciones en verde**, incluidas T-SEQ, T-CONC (6 procesos × 5 tickets = 30 números únicos), flujo completo por API y ajuste de hora de cierre.
 
 **Limitaciones conocidas de la Fase 2:**
 
-- Los endpoints de consola todavía no tienen autenticación ni autorización por operador/servicio; la Fase 4 debe añadir políticas y `403` reales.
+- Los endpoints de consola y de administración todavía no tienen autenticación ni autorización por operador/servicio; la Fase 4 debe añadir políticas y `403` reales. La pantalla `/admin/ajustes` debe usarse solo en local hasta entonces.
 - El servicio local de impresión (`http://127.0.0.1:9100/print`) no está implementado; el driver existe pero requiere ese servicio externo. QZ Tray se carga dinámicamente.
 - `BROADCAST_CONNECTION=log` por defecto y `null` en pruebas; para tiempo real hay que ejecutar `php artisan reverb:start` y cambiar la conexión a `reverb`.
 - El quiosco muestra todas las secciones activas; la asignación por dispositivo es Fase 5 (Q-12).
@@ -665,6 +682,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 ### Fase 5 — Administración, reportes y multimedia
 
 - [ ] CRUD de secciones, ventanillas, operadores y servicios.
+- [x] Ajuste de la hora de cierre de jornada (implementado como base de administración; UI ampliada en esta fase).
 - [ ] Configuración de secciones habilitadas por quiosco.
 - [ ] Configuración de impresoras y driver por dispositivo.
 - [ ] Matriz de códigos editable y auditable.
@@ -729,12 +747,13 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 2: **58 pruebas, 182 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 2: **71 pruebas, 226 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
 - T-CONC: 6 procesos en paralelo emiten 5 tickets cada uno; se verifican 30 números únicos y consecutivos contra MySQL real.
 - Flujo API completo: emisión → llamado → rellamado → inicio → finalización, más snapshot de pantalla.
+- Ajustes: hora de cierre por defecto, cambio persistente, validación, comparación horaria y API de administración.
 
 La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportamiento de `lockForUpdate` ni de las columnas generadas.
 
@@ -744,7 +763,8 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 
 - Logs de Laravel en `storage/logs`.
 - Healthcheck del contenedor MySQL ya configurado en `compose.yaml`.
-- Scheduler: `tickets:no-show` cada minuto y `tickets:day:close` a las 16:30. En local se ejecuta con `php artisan schedule:work`; en producción, con el cron de Laravel.
+- Scheduler: `tickets:no-show` cada minuto y `tickets:day:close` cada minuto, con ejecución efectiva cuando la hora local alcanza la hora configurada en `/admin/ajustes` (por defecto `16:30`). En local se ejecuta con `php artisan schedule:work`; en producción, con el cron de Laravel.
+- Cierre manual: `php artisan tickets:day:close --force`.
 - Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola sigue funcionando por polling cada 5 segundos.
 - Redis: instalado en la arquitectura objetivo pero no habilitado; caché, colas y sesiones usan base de datos en local.
 - Pendiente: healthchecks de aplicación y Reverb, Horizon, respaldos automatizados y purga a 12 meses.
@@ -765,7 +785,7 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 | Q-04 | Código/serie de servicios exclusivos | Código general de la sección + etiqueta de servicio |
 | Q-05 | Política de no presentado | 2 llamados, cierre 1 minuto después del último, sin reencolado manual |
 | Q-06 | Operador en múltiples secciones | Una sola sección por jornada |
-| Q-15 | Horario de operación y cierre | 08:00–16:30; en espera expiran, activos se finalizan |
+| Q-15 | Horario de operación y cierre | 08:00–16:30; hora de cierre configurable desde administración (ver 15.3); en espera expiran, llamados sin atención pasan a no presentado y atendidos a finalizado |
 
 > **Riesgo operativo registrado:** cerrar como no presentado **1 minuto** después del segundo llamado es un margen muy corto para que una persona llegue a la ventanilla. Se recomienda medir el efecto en la Fase 2 y, si hay reclamos, proponer una nueva acta con un margen mayor (por ejemplo, 3–5 minutos) antes de ajustar el sistema.
 
@@ -797,7 +817,18 @@ Respuestas del responsable registradas en la sesión de trabajo del 2026-11-06, 
 - **Q-13:** Cajas queda fuera de cualquier integración de cobro; su alcance es emisión, llamado, atención y cierre de tickets.
 - **Q-14:** la impresión es ESC/POS sobre USB. El backend genera un único payload y el dispositivo lo entrega al driver configurado: **QZ Tray** (WebSocket local) o **servicio local** (HTTP local). La configuración debe permitir elegir el driver por impresora o por quiosco, sin cambiar el código de negocio.
 
-### 15.3 Detalles de implementación por confirmar
+### 15.3 Ajuste del cierre de jornada (2026-11-06)
+
+Decisión posterior al cierre de la Fase 2:
+
+- La hora de cierre es **configurable desde el módulo de administración** (`/admin/ajustes`) y el scheduler ejecuta el cierre a esa hora. Valor por defecto: **16:30**.
+- Al cierre, los estados se resuelven así:
+  - `waiting` → `expired` (nunca fue llamado).
+  - `called` → `no_show` (fue llamado pero no atendido).
+  - `in_service` → `finished` (fue atendido pero no se finalizó).
+- Un administrador puede forzar el cierre con `php artisan tickets:day:close --force`.
+
+### 15.4 Detalles de implementación por confirmar
 
 No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases indicadas:
 
@@ -818,7 +849,7 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 4. ~~Implementar el validador y su comando.~~ Completado.
 5. ~~Escribir las pruebas T-MAP antes de habilitar cualquier sección.~~ Completado: 19 pruebas en verde.
 6. ~~Configurar la base de datos de pruebas en MySQL.~~ Completado: `gestion_tickets_test`.
-7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 58 pruebas en verde y smoke test de `/quiosco`, `/consola` y API.
+7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 71 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/admin/ajustes` y API.
 8. Comenzar la Fase 3: ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados.
 
 ---
@@ -835,7 +866,9 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 | WebSocket no conecta | Reverb detenido o `BROADCAST_CONNECTION` distinto de `reverb` | Ejecutar `php artisan reverb:start` y ajustar `.env` |
 | La impresión falla | Servicio local no disponible o QZ Tray sin conexión | Revisar `VITE_PRINT_SERVICE_URL`, iniciar el servicio o QZ Tray |
 | `npm run build` no refleja cambios | Manifest de Vite desactualizado | Ejecutar `npm run build` o `npm run dev` |
+| El cierre no se ejecuta | Scheduler detenido o hora configurada posterior a la actual | Revisar `php artisan schedule:work` y la hora en `/admin/ajustes` |
+| El cierre se ejecutó antes de tiempo | Hora mal configurada o uso de `--force` | Corregir la hora; `--force` omite la comprobación horaria |
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 y 2 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 y 2 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La pantalla de administración todavía no tiene autenticación; debe usarse solo en local hasta la Fase 4. Cualquier avance debe reflejarse aquí y en el acta de decisiones.

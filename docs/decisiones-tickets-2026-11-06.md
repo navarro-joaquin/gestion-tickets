@@ -43,4 +43,15 @@
 
 La persona responsable confirma que esta matriz refleja el acuerdo vigente y que no se asignaron letras por suposición.
 
+## Addendum — Ajuste del cierre de jornada (2026-11-06)
+
+Decisión posterior a la firma original:
+
+- **Horario de operación:** 08:00 hasta la hora de cierre configurable desde el módulo de administración. Valor por defecto: **16:30**.
+- **Ejecución:** el cierre se ejecuta automáticamente a la hora configurada.
+- **Tickets en espera:** expiran.
+- **Tickets llamados sin atención:** se marcan como **no presentados**.
+- **Tickets en atención sin finalizar:** se finalizan.
+- **Responsable:** Alvaro Navarro.
+
 _Generado desde docs/formulario-decisiones.html el 2026-11-06T16:17:32.435Z._

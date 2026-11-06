@@ -9,4 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('tickets:no-show')->everyMinute()->withoutOverlapping();
-Schedule::command('tickets:day:close')->dailyAt('16:30');
+Schedule::command('tickets:day:close')->everyMinute()->withoutOverlapping();

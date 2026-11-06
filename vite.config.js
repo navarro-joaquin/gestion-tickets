@@ -12,6 +12,7 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/js/apps/kiosk/main.ts',
                 'resources/js/apps/console/main.ts',
+                'resources/js/apps/admin/main.ts',
             ],
             refresh: true,
             fonts: [
