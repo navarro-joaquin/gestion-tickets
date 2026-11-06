@@ -1,0 +1,26 @@
+<?php
+
+namespace Tests\Concerns;
+
+use App\Domain\Sections\Category;
+use App\Domain\Sections\Section;
+use Database\Seeders\CategorySeeder;
+use Database\Seeders\SectionSeeder;
+
+trait SeedsTicketMatrix
+{
+    protected function seedMatrix(): void
+    {
+        $this->seed([CategorySeeder::class, SectionSeeder::class]);
+    }
+
+    protected function section(string $slug): Section
+    {
+        return Section::query()->where('slug', $slug)->sole();
+    }
+
+    protected function category(string $slug): Category
+    {
+        return Category::query()->where('slug', $slug)->sole();
+    }
+}

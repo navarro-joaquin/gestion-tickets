@@ -1,7 +1,7 @@
 # Guía de implementación — Gestión de Tickets
 
 **Proyecto:** `gestion-tickets`  
-**Estado:** base técnica instalada; dominio funcional aún no implementado.  
+**Estado:** Fases 1 y 2 completadas; núcleo de tickets operativo en entorno local.  
 **Última actualización:** 2026-11-06
 
 ---
@@ -10,7 +10,7 @@
 
 Documentar cómo está montado el proyecto, cómo levantarlo y en qué orden implementar el sistema de generación y gestión de tickets descrito en el diseño técnico. Es un documento vivo: debe actualizarse cuando se cierren decisiones pendientes o cambie la infraestructura.
 
-Esta guía **no** afirma que los módulos de negocio estén implementados. A la fecha solo existe el esqueleto de Laravel, la base de datos y el contenedor MySQL.
+Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1) y el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2). Los módulos de operación avanzada, prioridades, administración, reportes y multimedia siguen pendientes (Fases 3 a 6).
 
 ---
 
@@ -26,10 +26,10 @@ Esta guía **no** afirma que los módulos de negocio estén implementados. A la 
 | Docker Compose | 5.5.1 |
 | Node.js / npm | 24.19.0 / 12.0.2 |
 | Laravel Boost | 2.10.4 (dev) |
-| Frontend | Vite + Tailwind instalados; Vue 3 + TypeScript **pendiente** |
-| Redis / Reverb / Echo | **pendientes** |
-| Módulos de dominio | Fundaciones de Fase 1: secciones, categorías y matriz código→categoría |
-| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active` |
+| Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk` y `console` |
+| Redis / Reverb / Echo | Reverb instalado (`dev-main`) y Echo/Pusher JS en el frontend; Redis no habilitado todavía |
+| Módulos de dominio | Fases 1 y 2: matriz de códigos y núcleo de tickets |
+| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events` |
 
 ### Archivos relevantes creados
 
@@ -37,7 +37,34 @@ Esta guía **no** afirma que los módulos de negocio estén implementados. A la 
 gestion-tickets/
 ├── compose.yaml                  # Contenedor MySQL 8.4 LTS
 ├── .env                          # Configuración local (no se versiona)
-├── .env.example                  # Plantilla versionada
+├── .env.example                  # Plantilla versionada (Reverb, Vite, impresión)
+├── app/
+│   ├── Domain/
+│   │   ├── Sections/             # Fase 1: secciones, categorías, matriz y gate
+│   │   └── Ticketing/            # Fase 2: modelos, acciones y formateador ESC/POS
+│   ├── Console/Commands/         # tickets:no-show, tickets:day:close
+│   ├── Events/TicketQueueChanged.php
+│   └── Http/
+│       ├── Controllers/Api/V1/   # SectionController, Ticket, Console, Display
+│       ├── Requests/Api/V1/
+│       └── Resources/TicketResource.php
+├── database/
+│   ├── migrations/               # Fase 1 + Fase 2
+│   ├── factories/Domain/Ticketing/
+│   └── seeders/                  # CategorySeeder, SectionSeeder
+├── resources/
+│   ├── js/
+│   │   ├── apps/kiosk/           # Quiosco Vue 3
+│   │   ├── apps/console/         # Consola Vue 3
+│   │   └── shared/               # API, tipos, Echo e impresión
+│   └── views/                    # kiosk.blade.php, console.blade.php
+├── routes/
+│   ├── api.php                   # API v1
+│   ├── channels.php              # Canal sections.{slug}
+│   └── console.php               # Scheduler
+├── tests/
+│   ├── Feature/                  # T-MAP, T-SEQ, API
+│   └── Unit/Ticketing/           # Máquina de estados
 └── docs/
     ├── guia-implementacion.md              # Este documento
     ├── formulario-decisiones.html          # Formulario interactivo de Fase 0
@@ -76,10 +103,11 @@ node -v
 ```powershell
 cd C:\Users\anavarro\Herd\gestion-tickets
 composer install
+npm install
 Copy-Item .env.example .env
 php artisan key:generate
 docker compose up -d
-php artisan migrate
+php artisan migrate --seed
 ```
 
 Antes de `docker compose up -d`, editar `.env` y definir credenciales reales. Los valores `change-me` de `.env.example` son solo marcadores.
@@ -93,6 +121,8 @@ docker compose up -d          # asegurar MySQL
 php artisan serve             # http://localhost:8000
 # o, si Herd está activo: http://gestion-tickets.test
 npm run dev                   # solo si se trabaja el frontend
+php artisan schedule:work     # opcional: no-show y cierre de jornada
+php artisan reverb:start      # opcional: tiempo real, con BROADCAST_CONNECTION=reverb
 ```
 
 ### 4.3 Verificación
@@ -102,6 +132,9 @@ docker compose ps
 php artisan migrate:status
 php artisan about
 php artisan tickets:codes:verify --strict
+php artisan test --compact
+npm run build
+npm run typecheck
 ```
 
 `docker compose ps` debe mostrar el contenedor como `healthy`. `tickets:codes:verify --strict` debe terminar con código `0` y las tres secciones en `Matriz OK` / `Operativa Sí`.
@@ -218,7 +251,15 @@ Laravel y Docker Compose leen el mismo archivo `.env`:
 
 `DB_ROOT_PASSWORD` no la usa Laravel. Mantenerla en `.env` es una comodidad local; en un entorno serio debe provenir de un gestor de secretos.
 
-### 6.2 Reglas
+### 6.2 Reverb, Echo e impresión
+
+- `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`, `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`: servidor Reverb.
+- `VITE_REVERB_*`: mismas credenciales expuestas al frontend por Vite (la clave pública, nunca el secreto).
+- `BROADCAST_CONNECTION`: `log` o `null` por defecto; usar `reverb` para tiempo real.
+- `VITE_PRINT_DRIVER`: `local` o `qz`; el quiosco permite cambiarlo y lo guarda en `localStorage`.
+- `VITE_PRINT_SERVICE_URL`: URL del servicio local de impresión; por defecto `http://127.0.0.1:9100`.
+
+### 6.3 Reglas
 
 - `.env` está en `.gitignore`: nunca se versiona.
 - `.env.example` solo contiene marcadores.
@@ -317,7 +358,7 @@ Orden recomendado de migraciones (después de las tablas base de Laravel):
 20. `daily_metrics`
 21. `idempotency_keys`
 
-Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06). Detalle real:
+Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06) y las tablas 12 a 15 desde la Fase 2. Detalle real:
 
 ### 9.1 `sections`
 
@@ -373,13 +414,83 @@ Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06). Detalle real
 - `is_active` boolean, por defecto `true`; un usuario inactivo no pasa el `Gate::before` de administración.
 - Índice `role`.
 
-Detalles críticos para las fases siguientes:
+### 9.6 `ticket_sequences`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `section_id` | FK `sections` | `cascadeOnDelete` |
+| `code` | char(1) | código de la sección (A–I) |
+| `period_key` | date | día de la numeración (`America/La_Paz`) |
+| `last_number` | unsigned int | último número entregado; por defecto `0` |
+| `timestamps` | — | — |
+
+Único `(section_id, code, period_key)`. La emisión incrementa `last_number` dentro de la transacción con bloqueo `FOR UPDATE`; el número nunca se reutiliza aunque se borre un ticket.
+
+### 9.7 `tickets`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `section_id` | FK `sections` | sección de origen/propietaria |
+| `section_ticket_code_id` | FK `section_ticket_codes` | código que resolvió la matriz |
+| `category_id` | FK `categories` | categoría declarada |
+| `code` | char(1) | copia del código para reportes |
+| `period_key` | date | día de emisión |
+| `number` | unsigned int | consecutivo por sección y código |
+| `status` | varchar(20) | `waiting`, `called`, `in_service`, `finished`, `no_show`, `cancelled`, `expired` |
+| `station_label` | varchar(50) nullable | ventanilla del llamado actual |
+| `operator_id` | FK `users` nullable | operador del llamado actual; sin `SET NULL` (los usuarios se desactivan) |
+| `issued_at` | timestamp | emisión |
+| `called_at` | timestamp nullable | último llamado |
+| `call_count` | tinyint unsigned | llamados acumulados (máximo 2) |
+| `started_at` / `finished_at` / `closed_at` | timestamp nullable | hitos de atención y cierre |
+| `timestamps` | — | — |
+
+Único `(section_id, code, period_key, number)`. Índices `(section_id, status, issued_at)` para la cola y `(section_id, category_id, issued_at)` para reportes.
+
+Dos columnas generadas almacenadas impiden la doble atención:
+
+- `active_station_key` = `station_label` cuando el estado es `called` o `in_service`, con índice único.
+- `active_operator_key` = `operator_id` en los mismos estados, con índice único.
+
+### 9.8 `ticket_assignments`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `ticket_id` | FK `tickets` | `cascadeOnDelete` |
+| `operator_id` | FK `users` nullable | `nullOnDelete` |
+| `station_label` | varchar(50) nullable | ventanilla asignada |
+| `reason` | varchar(30) | `called`, `recalled` |
+| `assigned_at` | timestamp | inicio de la asignación |
+| `released_at` | timestamp nullable | fin de la asignación |
+| `timestamps` | — | — |
+
+Índices `(ticket_id, assigned_at)` y `(station_label, released_at)`.
+
+### 9.9 `ticket_events`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `ticket_id` | FK `tickets` | `cascadeOnDelete` |
+| `type` | varchar(40) | `issued`, `called`, `recalled`, `started`, `finished`, `no_show`, `cancelled`, `expired` |
+| `actor_id` | FK `users` nullable | operador que ejecutó la acción |
+| `payload` | json nullable | datos del evento |
+| `occurred_at` | timestamp | momento del evento |
+| `created_at` | timestamp nullable | sin `updated_at` |
+
+Índices `(ticket_id, occurred_at)` y `type`. Es un registro append-only: la aplicación no lo actualiza ni lo borra.
+
+Detalles críticos ya implementados en la Fase 2:
 
 - `ticket_sequences` con único `(section_id, code, period_key)`.
 - `tickets` con único `(section_id, code, period_key, number)`.
 - Índice `(section_id, status, issued_at)` para la cola.
 - Columnas generadas únicas para impedir doble ticket activo por operador y por ventanilla.
-- `ticket_events` y `audit_logs` sin actualización ni borrado desde la aplicación.
+- `ticket_events` append-only; `audit_logs` queda para la Fase 5.
+- `section_id` representa la sección de origen; `current_section_id` y la transferencia llegan en la Fase 3.
 
 ---
 
@@ -475,19 +586,57 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - `phpunit.xml` usa MySQL (`gestion_tickets_test`); `tests/TestCase.php` aplica `LazilyRefreshDatabase`.
 - Zona horaria `America/La_Paz` (`APP_TIMEZONE`) y locale `es`.
 
-### Fase 2 — Núcleo de tickets
+### Fase 2 — Núcleo de tickets (completada el 2026-11-06)
 
-- [ ] `ticket_sequences` y emisión transaccional.
-- [ ] `tickets`, `ticket_assignments`, `ticket_events`.
-- [ ] Máquina de estados.
-- [ ] Endpoint de emisión para quiosco.
-- [ ] Quiosco mínimo en Vue 3 + TypeScript.
-- [ ] Impresión ESC/POS mediante adaptador configurable (QZ Tray o servicio local).
-- [ ] Consola mínima: llamar siguiente, rellamar, iniciar, finalizar.
-- [ ] Reverb + Echo y endpoint de snapshot.
-- [ ] Pruebas T-SEQ y T-CONC.
+- [x] `ticket_sequences` y emisión transaccional.
+- [x] `tickets`, `ticket_assignments`, `ticket_events`.
+- [x] Máquina de estados.
+- [x] Endpoint de emisión para quiosco.
+- [x] Quiosco mínimo en Vue 3 + TypeScript.
+- [x] Impresión ESC/POS mediante adaptador configurable (QZ Tray o servicio local).
+- [x] Consola mínima: llamar siguiente, rellamar, iniciar, finalizar.
+- [x] Reverb + Echo y endpoint de snapshot.
+- [x] Pruebas T-SEQ y T-CONC.
 
 **Salida:** emisión concurrente sin duplicados y llamado atómico; flujo quiosco → consola → pantalla funcionando en un entorno local.
+
+**Entregables de Fase 2:**
+
+- Modelos en `app/Domain/Ticketing/`: `Ticket`, `TicketSequence`, `TicketAssignment`, `TicketEvent`; enums `TicketStatus`, `TicketEventType`, `AssignmentReason`.
+- Acciones de dominio en `app/Domain/Ticketing/Actions/`:
+  - `IssueTicket`: valida la sección con `SectionActivationGate`, resuelve el código desde la matriz, crea/incrementa la secuencia del día con `lockForUpdate` y registra el evento `issued`.
+  - `CallNextTicket`: bloquea la sección, impide dos tickets activos por ventanilla u operador, toma el ticket en espera más antiguo y registra asignación y evento.
+  - `RecallTicket`: máximo 2 llamados; cierra la asignación anterior y crea una nueva de motivo `recalled`.
+  - `StartTicket`, `FinishTicket`, `MarkTicketNoShow`: transiciones de estado con evento y liberación de asignación.
+  - `CloseTicketDay`: expira los tickets en espera y finaliza los activos de la jornada.
+- `QueueNotifier` y evento `TicketQueueChanged` (`ShouldBroadcastNow`) en el canal `sections.{slug}` con evento `.queue.changed`. Los fallos de broadcast se capturan y no rompen la operación.
+- Impresión `EscPosTicketFormatter`: payload ESC/POS en CP850 con inicialización, tamaño doble, alimentación y corte; el endpoint devuelve `print.escpos_base64` y `print.text`.
+- API v1:
+  - `POST /api/v1/tickets` → emisión; `201` con `data` y `print`.
+  - `GET /api/v1/console/queue?section=&station=` → contador en espera y ticket activo de la ventanilla.
+  - `POST /api/v1/console/tickets/next` → siguiente ticket; `data: null` si la cola está vacía.
+  - `POST /api/v1/console/tickets/{ticket}/recall|start|finish`.
+  - `GET /api/v1/display/snapshot` → secciones activas, contador y llamados en curso.
+- Comandos y scheduler:
+  - `php artisan tickets:no-show`: cada minuto; cierra como no presentado tras 2 llamados y 1 minuto desde el último.
+  - `php artisan tickets:day:close`: diario a las 16:30; expira en espera y finaliza activos.
+- Frontend:
+  - `resources/js/apps/kiosk/`: selector de sección, categorías derivadas de la matriz y emisión con impresión.
+  - `resources/js/apps/console/`: selección de sección/ventanilla, ticket activo, llamar, rellamar, iniciar y finalizar; polling cada 5 s y suscripción a Echo si Reverb está configurado.
+  - Cliente API y tipos compartidos en `resources/js/shared/`.
+  - Adaptador de impresión con drivers `local` (HTTP a `VITE_PRINT_SERVICE_URL`) y `qz` (QZ Tray).
+- Rutas Blade `/quiosco` y `/consola`; Vite con entradas múltiples.
+- Pruebas: **58 pruebas, 182 aserciones en verde**, incluidas T-SEQ, T-CONC (6 procesos × 5 tickets = 30 números únicos) y flujo completo por API.
+
+**Limitaciones conocidas de la Fase 2:**
+
+- Los endpoints de consola todavía no tienen autenticación ni autorización por operador/servicio; la Fase 4 debe añadir políticas y `403` reales.
+- El servicio local de impresión (`http://127.0.0.1:9100/print`) no está implementado; el driver existe pero requiere ese servicio externo. QZ Tray se carga dinámicamente.
+- `BROADCAST_CONNECTION=log` por defecto y `null` en pruebas; para tiempo real hay que ejecutar `php artisan reverb:start` y cambiar la conexión a `reverb`.
+- El quiosco muestra todas las secciones activas; la asignación por dispositivo es Fase 5 (Q-12).
+- La transferencia entre secciones y el `current_section_id` son Fase 3 (Q-11).
+- La proporción 2:1, el aging y los servicios exclusivos son Fase 4.
+- `laravel/reverb` se instaló como `dev-main` porque las versiones `v1.x` exigen `guzzlehttp/psr7 ^2.6` y el proyecto usa `^3.2`; `dev-main` acepta `^2.6|^3.0`. Debe reemplazarse por un release etiquetado cuando esté disponible.
 
 ### Fase 3 — Operación
 
@@ -580,7 +729,14 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Las pruebas T-MAP corren en verde (19 pruebas, 45 aserciones). Las pruebas de concurrencia con `FOR UPDATE SKIP LOCKED` y columnas generadas quedan para la Fase 2.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 2: **58 pruebas, 182 aserciones en verde**.
+
+- T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
+- T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
+- T-CONC: 6 procesos en paralelo emiten 5 tickets cada uno; se verifican 30 números únicos y consecutivos contra MySQL real.
+- Flujo API completo: emisión → llamado → rellamado → inicio → finalización, más snapshot de pantalla.
+
+La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportamiento de `lockForUpdate` ni de las columnas generadas.
 
 ---
 
@@ -588,8 +744,10 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 
 - Logs de Laravel en `storage/logs`.
 - Healthcheck del contenedor MySQL ya configurado en `compose.yaml`.
-- Pendiente: healthchecks de aplicación, Redis y Reverb.
-- Pendiente: Horizon, scheduler y respaldos automatizados.
+- Scheduler: `tickets:no-show` cada minuto y `tickets:day:close` a las 16:30. En local se ejecuta con `php artisan schedule:work`; en producción, con el cron de Laravel.
+- Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola sigue funcionando por polling cada 5 segundos.
+- Redis: instalado en la arquitectura objetivo pero no habilitado; caché, colas y sesiones usan base de datos en local.
+- Pendiente: healthchecks de aplicación y Reverb, Horizon, respaldos automatizados y purga a 12 meses.
 - Respaldos locales con `mysqldump`; en producción, binlog + copia externa cifrada.
 - RPO/RTO propuestos: 15 minutos / 2 horas, sujetos a validación.
 
@@ -648,19 +806,20 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 | Transferencia (Q-11) | ¿Quién autoriza: operador origen, operador destino o supervisor? ¿Se recalcula la prioridad con el perfil de la sección destino o se conserva la original? ¿El reporte se atribuye a la sección de origen o a la de destino? | Fase 3 (operador) |
 | Retención (Q-09) | ¿La auditoría append-only se conserva también 12 meses o tiene un plazo distinto? | Fase 5 (administración) |
 | Voz (Q-10) | Idioma, tipo de voz, volumen y si se usa TTS del sistema o un servicio externo. | Fase 5 (multimedia) |
-| Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. | Fase 2 (núcleo de tickets) |
+| Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados en la Fase 2; quedan reintentos/fallback y la autenticación del servicio local. | Fase 3 |
 
 ---
 
 ## 16. Primeros pasos concretos
 
 1. ~~Cerrar la Fase 0 y firmar la matriz de códigos.~~ Completado el 2026-11-06; ver [decisiones-tickets-2026-11-06.md](decisiones-tickets-2026-11-06.md).
-2. ~~Crear la rama `feat/fase-1-fundaciones`.~~ El proyecto todavía no es un repositorio git; se trabajó localmente. Inicializar git antes de la Fase 2.
+2. ~~Crear la rama `feat/fase-1-fundaciones`.~~ El repositorio git se inicializó y se publicó en `https://github.com/navarro-joaquin/gestion-tickets`; `main` sigue a `origin/main`.
 3. ~~Generar las migraciones de secciones, categorías y matriz.~~ Completado.
 4. ~~Implementar el validador y su comando.~~ Completado.
 5. ~~Escribir las pruebas T-MAP antes de habilitar cualquier sección.~~ Completado: 19 pruebas en verde.
 6. ~~Configurar la base de datos de pruebas en MySQL.~~ Completado: `gestion_tickets_test`.
-7. Comenzar la emisión de tickets de la Fase 2.
+7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 58 pruebas en verde y smoke test de `/quiosco`, `/consola` y API.
+8. Comenzar la Fase 3: ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados.
 
 ---
 
@@ -673,8 +832,10 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 | Cambios de `MYSQL_*` sin efecto | El volumen ya estaba inicializado | `ALTER USER` o `docker compose down -v` |
 | Laravel sigue usando SQLite | Configuración cacheada o `.env` incorrecto | `php artisan config:clear` |
 | Contenedor `unhealthy` | Inicialización lenta o error de arranque | `docker compose logs mysql` |
-| WebSocket no conecta | Reverb no implementado aún | Fase 2 |
+| WebSocket no conecta | Reverb detenido o `BROADCAST_CONNECTION` distinto de `reverb` | Ejecutar `php artisan reverb:start` y ajustar `.env` |
+| La impresión falla | Servicio local no disponible o QZ Tray sin conexión | Revisar `VITE_PRINT_SERVICE_URL`, iniciar el servicio o QZ Tray |
+| `npm run build` no refleja cambios | Manifest de Vite desactualizado | Ejecutar `npm run build` o `npm run dev` |
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06. No se han ejecutado pruebas de negocio ni se han implementado los módulos funcionales. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 y 2 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
