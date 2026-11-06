@@ -1,19 +1,47 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../../shared/api/client';
+import { TicketAnnouncer } from '../../shared/audio/announcer';
 import { getEcho } from '../../shared/echo';
-import type { DisplaySnapshot, Ticket } from '../../shared/types/api';
+import type { DisplaySnapshot, MediaAsset, MediaItem, Ticket } from '../../shared/types/api';
+import MediaStage from './components/MediaStage.vue';
+import QueueBoard from './components/QueueBoard.vue';
+
+const AUDIO_STORAGE_KEY = 'tickets.display.audio';
+
+const displayToken = new URLSearchParams(window.location.search).get('pantalla') ?? undefined;
 
 const snapshot = ref<DisplaySnapshot | null>(null);
 const error = ref('');
 const clock = ref(new Date());
 
+const announcer = new TicketAnnouncer();
+const audioEnabled = ref(false);
+const audioError = ref('');
+const speechSupported = announcer.speechSupported;
+
 const echoClient = getEcho();
 const subscribedChannels = new Set<string>();
+const announcedCalls = new Map<number, string>();
+let snapshotLoaded = false;
 let pollingTimer: ReturnType<typeof setInterval> | undefined;
 let clockTimer: ReturnType<typeof setInterval> | undefined;
 
 const sections = computed(() => snapshot.value?.data ?? []);
+const display = computed(() => snapshot.value?.display ?? null);
+const layout = computed(() => display.value?.layout ?? 'queue');
+
+const mediaItems = computed<MediaItem[]>(() =>
+    (snapshot.value?.playlists ?? [])
+        .filter((playlist) => playlist.is_active)
+        .flatMap((playlist) => playlist.items
+            .filter((item) => item.is_active && item.media !== null && item.media.is_active)
+            .map((item) => ({
+                playlist: playlist.name,
+                media: item.media as MediaAsset,
+                duration_seconds: item.duration_seconds,
+            }))),
+);
 
 const clockLabel = computed<string>(() =>
     new Intl.DateTimeFormat('es-BO', {
@@ -33,6 +61,10 @@ const dateLabel = computed<string>(() =>
 );
 
 onMounted(async () => {
+    if (localStorage.getItem(AUDIO_STORAGE_KEY) === '1') {
+        void restoreAudio();
+    }
+
     await loadSnapshot();
     subscribeToSections();
 
@@ -54,6 +86,8 @@ onBeforeUnmount(() => {
         clearInterval(clockTimer);
     }
 
+    announcer.disable();
+
     if (echoClient) {
         for (const channel of subscribedChannels) {
             echoClient.leave(channel);
@@ -63,14 +97,89 @@ onBeforeUnmount(() => {
 
 async function loadSnapshot(): Promise<void> {
     try {
-        const response = await api.snapshot();
+        const response = await api.snapshot(displayToken);
         snapshot.value = response;
         error.value = '';
+        detectAnnouncements();
         subscribeToSections();
     } catch (exception) {
         error.value = exception instanceof Error
             ? exception.message
             : 'No se pudo actualizar la pantalla.';
+    }
+}
+
+function detectAnnouncements(): void {
+    const calls = sections.value
+        .flatMap((section) => section.calling)
+        .slice()
+        .sort((left, right) =>
+            (left.called_at ?? '').localeCompare(right.called_at ?? '') || left.id - right.id,
+        );
+
+    for (const ticket of calls) {
+        const key = `${ticket.called_at ?? ''}|${ticket.call_count}`;
+        const previous = announcedCalls.get(ticket.id);
+
+        if (previous === key) {
+            continue;
+        }
+
+        announcedCalls.set(ticket.id, key);
+
+        if (snapshotLoaded) {
+            announcer.announce({
+                code: ticket.code,
+                label: ticket.label,
+                number: ticket.number,
+                station_label: ticket.station_label,
+            });
+        }
+    }
+
+    snapshotLoaded = true;
+}
+
+async function restoreAudio(): Promise<void> {
+    try {
+        const running = await announcer.enable();
+        audioEnabled.value = running;
+
+        if (!running) {
+            announcer.disable();
+        }
+    } catch {
+        announcer.disable();
+        audioEnabled.value = false;
+    }
+}
+
+async function toggleAudio(): Promise<void> {
+    audioError.value = '';
+
+    if (audioEnabled.value) {
+        announcer.disable();
+        audioEnabled.value = false;
+        localStorage.setItem(AUDIO_STORAGE_KEY, '0');
+
+        return;
+    }
+
+    try {
+        const running = await announcer.enable();
+
+        if (!running) {
+            announcer.disable();
+            throw new Error('El navegador bloqueó el audio. Vuelve a pulsar el botón.');
+        }
+
+        audioEnabled.value = true;
+        localStorage.setItem(AUDIO_STORAGE_KEY, '1');
+    } catch (exception) {
+        audioEnabled.value = false;
+        audioError.value = exception instanceof Error
+            ? exception.message
+            : 'No se pudo activar el audio.';
     }
 }
 
@@ -93,82 +202,60 @@ function subscribeToSections(): void {
         });
     }
 }
-
-function lastCall(tickets: Ticket[]): Ticket | null {
-    return tickets.length > 0 ? tickets[tickets.length - 1] : null;
-}
-
-function previousCalls(tickets: Ticket[]): Ticket[] {
-    return tickets.length <= 1 ? [] : tickets.slice(0, -1).reverse();
-}
 </script>
 
 <template>
     <main class="flex min-h-screen flex-col overflow-hidden bg-slate-950 text-white">
         <header class="flex flex-wrap items-end justify-between gap-6 border-b border-slate-800 px-10 py-8">
             <div>
-                <p class="text-lg uppercase tracking-[0.4em] text-sky-400">Turnos de atención</p>
+                <p class="text-lg uppercase tracking-[0.4em] text-sky-400">
+                    {{ display ? display.name : 'Turnos de atención' }}
+                </p>
                 <h1 class="mt-2 text-4xl font-semibold">Pantalla de llamados</h1>
             </div>
-            <div class="text-right">
-                <p class="font-mono text-6xl font-bold tracking-tight text-slate-100">{{ clockLabel }}</p>
-                <p class="mt-1 text-lg capitalize text-slate-400">{{ dateLabel }}</p>
+
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="text-right">
+                    <p class="font-mono text-6xl font-bold tracking-tight text-slate-100">{{ clockLabel }}</p>
+                    <p class="mt-1 text-lg capitalize text-slate-400">{{ dateLabel }}</p>
+                </div>
+
+                <div class="flex flex-col items-end gap-1">
+                    <button
+                        type="button"
+                        class="rounded-xl px-4 py-3 text-sm font-semibold transition"
+                        :class="audioEnabled
+                            ? 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-200'
+                            : 'bg-sky-500 text-slate-950 hover:bg-sky-400'"
+                        @click="toggleAudio"
+                    >
+                        {{ audioEnabled ? 'Ring + voz activos' : 'Activar audio' }}
+                    </button>
+                    <p v-if="audioError" class="max-w-56 text-right text-xs text-red-300">{{ audioError }}</p>
+                    <p v-else-if="!speechSupported" class="max-w-56 text-right text-xs text-slate-500">
+                        El navegador no soporta voz; se reproduce solo el timbre.
+                    </p>
+                </div>
             </div>
         </header>
 
-        <section class="grid flex-1 gap-6 px-10 py-8 lg:grid-cols-3">
-            <article
-                v-for="section in sections"
-                :key="section.section.slug"
-                class="flex flex-col rounded-[2rem] border border-slate-800 bg-slate-900 p-8"
-            >
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Sección</p>
-                        <h2 class="mt-2 text-3xl font-semibold">{{ section.section.name }}</h2>
-                    </div>
-                    <span class="rounded-full bg-slate-800 px-5 py-2 text-lg text-slate-300">
-                        {{ section.waiting_count }} en espera
-                    </span>
-                </div>
+        <section class="flex-1 px-10 py-8">
+            <QueueBoard v-if="layout === 'queue'" :sections="sections" />
 
-                <div v-if="lastCall(section.calling)" class="mt-10 flex-1">
-                    <p class="text-lg uppercase tracking-[0.3em] text-emerald-400">Llamando</p>
-                    <p class="mt-4 text-8xl font-black tracking-tight text-white">
-                        {{ lastCall(section.calling)?.label }}
-                    </p>
-                    <p class="mt-6 inline-flex rounded-2xl bg-sky-500 px-8 py-4 text-3xl font-semibold text-slate-950">
-                        {{ lastCall(section.calling)?.station_label }}
-                    </p>
-                    <p class="mt-4 text-lg text-slate-400">
-                        {{ lastCall(section.calling)?.status_label }}
-                    </p>
+            <div v-else-if="layout === 'mixed'" class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <QueueBoard :sections="sections" compact />
+                <MediaStage :items="mediaItems" />
+            </div>
 
-                    <div v-if="previousCalls(section.calling).length > 0" class="mt-8 space-y-2 border-t border-slate-800 pt-6">
-                        <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Llamados anteriores</p>
-                        <div
-                            v-for="ticket in previousCalls(section.calling)"
-                            :key="ticket.id"
-                            class="flex items-center justify-between rounded-xl bg-slate-950/60 px-4 py-3"
-                        >
-                            <span class="text-2xl font-bold">{{ ticket.label }}</span>
-                            <span class="text-lg text-slate-400">{{ ticket.station_label }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    v-else
-                    class="mt-10 flex flex-1 items-center justify-center rounded-3xl border border-dashed border-slate-800 p-10 text-center text-2xl text-slate-500"
-                >
-                    Espere su llamado
-                </div>
-            </article>
+            <div v-else class="h-full min-h-[32rem]">
+                <MediaStage :items="mediaItems" />
+            </div>
         </section>
 
         <footer class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 px-10 py-5 text-sm text-slate-500">
             <p>
                 {{ echoClient ? 'Actualización en tiempo real por WebSocket.' : 'Actualización automática cada 5 segundos.' }}
+                <span v-if="displayToken">· Pantalla autenticada por token.</span>
             </p>
             <p v-if="error" class="text-red-300">{{ error }}</p>
         </footer>

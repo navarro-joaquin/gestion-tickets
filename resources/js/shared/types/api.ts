@@ -183,7 +183,75 @@ export interface DisplaySnapshot {
         waiting_count: number;
         calling: Ticket[];
     }>;
+    display: DisplaySummary | null;
+    playlists: Playlist[];
     updated_at: string;
+}
+
+export type DisplayLayout = 'queue' | 'mixed' | 'media';
+
+export interface DisplaySummary {
+    id: number;
+    name: string;
+    slug: string;
+    layout: DisplayLayout;
+}
+
+export interface MediaAsset {
+    id: number;
+    name: string;
+    type: 'image' | 'video';
+    mime: string | null;
+    file_size: number;
+    duration_seconds: number | null;
+    is_active: boolean;
+    url: string;
+    created_at: string | null;
+}
+
+export interface PlaylistItem {
+    id: number;
+    position: number;
+    duration_seconds: number | null;
+    is_active: boolean;
+    media: MediaAsset | null;
+}
+
+export interface Playlist {
+    id: number;
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    items: PlaylistItem[];
+}
+
+export interface DisplayDevice {
+    id: number;
+    name: string;
+    slug: string;
+    token: string;
+    layout: DisplayLayout;
+    is_active: boolean;
+    last_seen_at: string | null;
+    url: string;
+    sections: Array<{
+        id: number;
+        slug: string;
+        name: string;
+        is_active: boolean;
+    }>;
+    playlists: Array<{
+        id: number;
+        name: string;
+        is_active: boolean;
+        items_count: number;
+    }>;
+}
+
+export interface MediaItem {
+    playlist: string;
+    media: MediaAsset;
+    duration_seconds: number | null;
 }
 
 export interface AdminSettings {

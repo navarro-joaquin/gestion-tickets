@@ -5,12 +5,16 @@ import type {
     AuditLogEntry,
     AuthUser,
     ConsoleQueue,
+    DisplayDevice,
+    DisplayLayout,
     DisplaySnapshot,
     IssuedTicketResponse,
     KioskDevice,
+    MediaAsset,
     Operator,
     OperatorSession,
     Paginated,
+    Playlist,
     PrintPayload,
     Printer,
     PriorityProfile,
@@ -43,13 +47,14 @@ function csrfToken(): string | null {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = csrfToken();
+    const isFormData = init.body instanceof FormData;
 
     const response = await fetch(`/api/v1${path}`, {
         ...init,
         credentials: 'same-origin',
         headers: {
             Accept: 'application/json',
-            'Content-Type': 'application/json',
+            ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
             ...(token ? { 'X-XSRF-TOKEN': token } : {}),
             ...(init.headers ?? {}),
         },
@@ -177,8 +182,10 @@ export const api = {
         });
     },
 
-    snapshot(): Promise<DisplaySnapshot> {
-        return request('/display/snapshot');
+    snapshot(displayToken?: string): Promise<DisplaySnapshot> {
+        const suffix = displayToken ? `?display=${encodeURIComponent(displayToken)}` : '';
+
+        return request(`/display/snapshot${suffix}`);
     },
 
     adminSettings(): Promise<{ data: AdminSettings }> {
@@ -435,6 +442,76 @@ export const api = {
     deleteReportExport(id: number): Promise<{ message: string }> {
         return request(`/admin/reports/exports/${id}`, { method: 'DELETE' });
     },
+
+    mediaAssets(): Promise<{ data: MediaAsset[] }> {
+        return request('/admin/media');
+    },
+
+    createMediaAsset(formData: FormData): Promise<{ data: MediaAsset; message: string }> {
+        return request('/admin/media', {
+            method: 'POST',
+            body: formData,
+        });
+    },
+
+    updateMediaAsset(id: number, payload: MediaAssetPayload): Promise<{ data: MediaAsset; message: string }> {
+        return request(`/admin/media/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteMediaAsset(id: number): Promise<{ message: string }> {
+        return request(`/admin/media/${id}`, { method: 'DELETE' });
+    },
+
+    playlists(): Promise<{ data: Playlist[] }> {
+        return request('/admin/playlists');
+    },
+
+    createPlaylist(payload: PlaylistPayload): Promise<{ data: Playlist; message: string }> {
+        return request('/admin/playlists', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updatePlaylist(id: number, payload: PlaylistPayload): Promise<{ data: Playlist; message: string }> {
+        return request(`/admin/playlists/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deletePlaylist(id: number): Promise<{ message: string }> {
+        return request(`/admin/playlists/${id}`, { method: 'DELETE' });
+    },
+
+    displays(): Promise<{ data: DisplayDevice[] }> {
+        return request('/admin/displays');
+    },
+
+    createDisplay(payload: DisplayPayload): Promise<{ data: DisplayDevice; message: string }> {
+        return request('/admin/displays', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateDisplay(id: number, payload: DisplayPayload): Promise<{ data: DisplayDevice; message: string }> {
+        return request(`/admin/displays/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteDisplay(id: number): Promise<{ message: string }> {
+        return request(`/admin/displays/${id}`, { method: 'DELETE' });
+    },
+
+    rotateDisplayToken(id: number): Promise<{ data: DisplayDevice; message: string }> {
+        return request(`/admin/displays/${id}/token`, { method: 'POST' });
+    },
 };
 
 export interface PriorityProfilePayload {
@@ -515,6 +592,35 @@ export interface AuditLogFilters {
     entity_type?: string;
     page?: number;
     per_page?: number;
+}
+
+export interface MediaAssetPayload {
+    name: string;
+    type: 'image' | 'video';
+    duration_seconds: number | null;
+    is_active: boolean;
+}
+
+export interface PlaylistItemPayload {
+    media_asset_id: number;
+    duration_seconds: number | null;
+    is_active: boolean;
+}
+
+export interface PlaylistPayload {
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    items: PlaylistItemPayload[];
+}
+
+export interface DisplayPayload {
+    name: string;
+    slug: string | null;
+    layout: DisplayLayout;
+    is_active: boolean;
+    sections: string[];
+    playlists: number[];
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {

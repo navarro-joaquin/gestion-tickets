@@ -367,7 +367,7 @@ Orden recomendado de migraciones (después de las tablas base de Laravel):
 20. `daily_metrics`
 21. `idempotency_keys`
 
-Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06) y las tablas 12 a 15 desde la Fase 2. Detalle real:
+Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06), las tablas 12 a 15 desde la Fase 2, las tablas 17 y 19 desde la Fase 5A, la tabla 20 desde la Fase 5B y la tabla 18 desde la Fase 5C. Detalle real:
 
 ### 9.1 `sections`
 
@@ -881,21 +881,69 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - El simulador no descuenta autorizaciones por servicio ni aging sobre datos reales: simula solo la secuencia de grupos con el perfil elegido.
 - Reverb sigue siendo `dev-main` y `BROADCAST_CONNECTION=log` por defecto; sin Reverb la pantalla y la consola usan polling cada 5 segundos.
 
-### Fase 5 — Administración, reportes y multimedia
+### Fase 5 — Administración, reportes y multimedia (completada el 2026-11-06)
 
-- [ ] CRUD de secciones, ventanillas, operadores y servicios.
-- [x] Ajuste de la hora de cierre de jornada (implementado como base de administración; UI ampliada en esta fase).
-- [ ] Configuración de secciones habilitadas por quiosco.
-- [ ] Configuración de impresoras y driver por dispositivo.
-- [ ] Matriz de códigos editable y auditable.
-- [ ] Contenidos multimedia, playlists y pantallas.
-- [ ] Anuncio por voz con ring + TTS (código, número, ventanilla).
-- [ ] Reportes por sección, categoría, servicio y ventanilla.
-- [ ] Exportaciones en cola.
-- [ ] Consulta de auditoría.
-- [ ] Purga o archivo de datos a los 12 meses.
+- [x] CRUD de secciones, ventanillas, operadores y servicios.
+- [x] Ajuste de la hora de cierre de jornada y retención de datos.
+- [x] Configuración de secciones habilitadas por quiosco.
+- [x] Configuración de impresoras y driver por dispositivo.
+- [x] Matriz de códigos editable y auditable.
+- [x] Contenidos multimedia, playlists y pantallas.
+- [x] Anuncio por voz con ring + TTS (código, número, ventanilla).
+- [x] Reportes por sección, categoría, servicio y ventanilla.
+- [x] Exportaciones en cola.
+- [x] Consulta de auditoría.
+- [x] Purga o archivo de datos a los 12 meses.
 
-**Salida:** operación administrable sin tocar base de datos.
+La fase se ejecutó en tres entregas:
+
+**Fase 5A — Administración y auditoría (commit `f95d465`):**
+
+- Migraciones `audit_logs`, `kiosk_devices`, `kiosk_device_section` y `printers`.
+- Auditoría append-only en `audit_logs` con `AuditLogger`; cada alta, cambio o baja de catálogos registra antes/después, usuario, IP y fecha.
+- CRUD de usuarios con roles y baja lógica; no se eliminan usuarios con historial.
+- Secciones editables (nombre, estado y orden) con bloqueo si tienen tickets activos.
+- Matriz código→categoría editable solo remapeando las categorías de los tres códigos existentes; se valida con `SectionMatrixValidator` y exige confirmación explícita.
+- CRUD de ventanillas por sección, quioscos con token y secciones habilitadas, e impresoras por ventanilla con driver `local` o `qz`.
+- Endpoints `GET/PUT /api/v1/admin/sections`, `PUT /api/v1/admin/sections/{slug}/matrix`, `apiResource` de ventanillas, usuarios, quioscos y impresoras, y `GET /api/v1/admin/audit-logs`.
+- Paneles Vue: secciones, ventanillas, usuarios, quioscos, impresoras y auditoría.
+- Pruebas T-ADMIN (14 pruebas) y suite de **141 pruebas, 592 aserciones** al cierre de 5A.
+
+**Fase 5B — Reportes, exportaciones y retención (commit `ebbcaea`):**
+
+- Migración `report_exports`; estados `queued`, `processing`, `completed` y `failed`.
+- `TicketReport` agrega totales y desgloses por sección de origen, categoría, servicio y ventanilla, con promedios de espera y atención.
+- Filtros por rango de fechas, sección, categoría, servicio y ventanilla; detalle paginado de tickets.
+- Exportación CSV asíncrona con `GenerateReportExport` sobre la cola `database`; el archivo se guarda en `storage/app/private/reports` y se descarga con BOM UTF-8 y separador coma.
+- `RetentionPolicy` con la clave `tickets.retention_months` (12 por defecto). `tickets:purge` archiva en CSV y elimina solo tickets terminales con `closed_at` anterior al corte; admite `--months=` y `--dry-run`; el scheduler lo ejecuta a las 03:00.
+- Endpoints `GET /api/v1/admin/reports/summary`, `GET /api/v1/admin/reports/tickets`, `GET/POST /api/v1/admin/reports/exports`, `GET /api/v1/admin/reports/exports/{export}/download` y `DELETE /api/v1/admin/reports/exports/{export}`.
+- Panel `ReportsPanel.vue` con tarjetas, tablas, detalle paginado y gestión de exportaciones; la retención se edita en `/admin/ajustes`.
+- Pruebas T-REP (8 pruebas) y suite de **149 pruebas, 661 aserciones** al cierre de 5B.
+
+**Fase 5C — Multimedia, pantallas y voz (esta entrega):**
+
+- Migraciones `media_assets`, `playlists`, `playlist_items`, `displays`, `display_section` y `display_playlist`.
+- Contenidos multimedia en el disco público (`storage/app/public/media`): imágenes JPG/PNG/WEBP/GIF y videos MP4/WEBM, con duración opcional por elemento.
+- Playlists ordenadas con posición, duración por contenido y activación individual; una playlist puede asignarse a varias pantallas.
+- Pantallas con token propio, secciones visibles, playlists y tres layouts: `queue` (solo llamados), `mixed` (llamados + multimedia) y `media` (solo multimedia).
+- `GET /api/v1/display/snapshot?display={token}` filtra las secciones de la pantalla, valida el token activo, actualiza `last_seen_at` como máximo una vez por minuto y devuelve las playlists con sus URLs públicas. Sin token mantiene el comportamiento público anterior.
+- `POST /api/v1/admin/displays/{display}/token` regenera el token y deja inservible el enlace anterior.
+- Panel Vue: contenidos, playlists y pantallas, con vista previa, reordenamiento, copia del enlace y regeneración de token.
+- Anuncio por voz en el navegador: timbre de dos tonos con Web Audio API y síntesis de voz (`es-BO`, con respaldo a cualquier voz española) que dice código, número y ventanilla. Se activa con un botón por el bloqueo de audio de los navegadores y la preferencia se conserva en `localStorage`. Las llamadas nuevas y los rellamados se detectan comparando `called_at` y `call_count` entre snapshots; el primer snapshot no anuncia.
+- Pruebas T-MEDIA/T-DISPLAY (10 pruebas) y suite final de **159 pruebas, 722 aserciones**.
+
+**Salida:** operación administrable sin tocar base de datos, con reportes, retención y pantallas multimedia con anuncio por voz.
+
+**Limitaciones conocidas de la Fase 5C:**
+
+- La síntesis de voz depende del navegador y del sistema operativo de la pantalla; no se usa un servicio TTS externo. Si no hay voz española instalada, se usa la voz disponible o solo el timbre.
+- El audio requiere una interacción inicial (botón “Activar audio”). Tras recargar la pantalla, si el navegador vuelve a bloquear el audio, hay que pulsar el botón otra vez.
+- Los videos se reproducen silenciados para no tapar el anuncio de voz.
+- El almacenamiento multimedia es local (`public`); para varias réplicas hay que migrar a un disco compartido (S3 u otro).
+- La rotación de tokens no invalida sesiones de operador ni otros tokens; solo afecta al enlace de la pantalla.
+- No hay todavía un editor de recortes ni transcodificación de video: se sirve el archivo tal como se sube.
+- La exportación CSV requiere `php artisan queue:work`; sin worker queda en `queued`.
+
 
 ### Fase 6 — Endurecimiento y piloto
 
@@ -949,7 +997,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 4: **127 pruebas, 494 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 5: **159 pruebas, 722 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
@@ -1046,8 +1094,8 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 | Tema | Detalle | Fase aproximada |
 |---|---|---|
 | Transferencia (Q-11) | Resuelto en lo operativo en la Fase 3: la transfiere el operador que atiende, con motivo y operador de destino opcionales, y se conserva la prioridad original. La Fase 4 añadió la autorización por rol; como el perfil de prioridad es global, no hay recálculo por sección destino. | Resuelto (Fases 3 y 4) |
-| Retención (Q-09) | ¿La auditoría append-only se conserva también 12 meses o tiene un plazo distinto? | Fase 5 (administración) |
-| Voz (Q-10) | Idioma, tipo de voz, volumen y si se usa TTS del sistema o un servicio externo. | Fase 5 (multimedia) |
+| Retención (Q-09) | Implementado en 5B: 12 meses por defecto, configurable entre 1 y 120; `tickets:purge` archiva en CSV y elimina solo tickets terminales. La auditoría conserva su propio historial y no entra en la purga de tickets. | Resuelto (Fase 5B) |
+| Voz (Q-10) | Implementado en 5C con TTS del navegador (`es-BO`), timbre con Web Audio API y activación por gesto del usuario. No se usa servicio externo. | Resuelto (Fase 5C) |
 | Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados; la Fase 3 añadió reimpresión y registro de fallos, pero quedan reintentos/fallback y la autenticación del servicio local. | Fase 4/5 |
 
 ### 15.5 Operación de la Fase 3 (2026-11-06)
@@ -1077,6 +1125,36 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Política de tickets:** operar, transferir y reimprimir exigen una sesión activa en la sección actual del ticket. Un administrador conserva acceso total por `Gate::before`, pero las acciones de consola siguen requiriendo sesión de operador.
 - **Cierre de jornada:** sin cambios respecto de la Fase 3; las sesiones y asignaciones se cierran junto con los tickets.
 
+### 15.7 Administración y auditoría (Fase 5A, 2026-11-06)
+
+- **Auditoría:** cada mutación de catálogos registra `action`, entidad, `before`, `after`, usuario e IP en `audit_logs`. La tabla es de solo inserción desde la aplicación.
+- **Secciones:** el nombre, estado y orden son editables; si la sección tiene tickets activos se bloquea la edición para no romper la operación en curso.
+- **Matriz:** solo se permite remapear las categorías de los tres códigos existentes. No se pueden crear códigos nuevos desde la interfaz; el cambio exige confirmación explícita y se valida con `SectionMatrixValidator`.
+- **Usuarios:** el alta y la edición usan `AdminUserRequest`; la baja es lógica (`is_active=false`) para conservar el historial de tickets y auditoría.
+- **Quioscos:** `kiosk_devices` guarda un token aleatorio de 48 caracteres y una lista de secciones activas. La URL pública es `/quiosco?quiosco={token}`.
+- **Impresoras:** cada impresora pertenece opcionalmente a una ventanilla y declara driver (`local` o `qz`), destino, ancho de papel y configuración adicional.
+- **Autorización:** todos los endpoints de administración exigen rol `admin`; la consola exige sesión y rol admin/supervisor/operador.
+
+### 15.8 Reportes, exportaciones y retención (Fase 5B, 2026-11-06)
+
+- **Agregación:** los reportes agrupan por `section_id` de origen (no por sección actual) y por `station_label` registrado en el ticket; así una transferencia no altera el reporte de la sección que emitió el ticket.
+- **Filtros:** rango de fechas inclusivo, sección, categoría, servicio y ventanilla. El detalle se ordena por fecha de emisión descendente y se pagina de 25 en 25 (máximo 100).
+- **Exportación:** se crea un registro `report_exports` en estado `queued` y se despacha `GenerateReportExport`. El job escribe un CSV con BOM UTF-8, separador coma y encabezados en español; al completar guarda ruta, tamaño y número de filas. El archivo se descarga por endpoint autenticado.
+- **Retención:** `RetentionPolicy` lee `tickets.retention_months` (12 por defecto). `tickets:purge` calcula el corte con `subMonthsNoOverflow`, archiva los tickets terminales en `storage/app/private/archives` y luego los elimina. Se programa a las 03:00 con `withoutOverlapping`.
+- **Alcance de la purga:** solo tickets con estado terminal y `closed_at` anterior al corte. Los tickets activos nunca se eliminan. La auditoría no se purga con este comando.
+- **Cola:** la exportación requiere un worker (`php artisan queue:work`). Sin worker, el registro permanece en `queued`.
+
+### 15.9 Multimedia, pantallas y voz (Fase 5C, 2026-11-06)
+
+- **Contenidos:** `media_assets` guarda metadatos y la ruta en el disco `public`. La API expone la URL pública (`/storage/media/...`); se requiere `php artisan storage:link`.
+- **Playlists:** `playlist_items` ordena por `position` y permite duración por elemento. Una playlist inactiva, un elemento inactivo o un contenido inactivo se excluyen del snapshot público.
+- **Pantallas:** `displays` tiene token propio, layout y relaciones con secciones y playlists. El snapshot público solo devuelve las secciones asignadas; un token inactivo o inexistente responde 404. `last_seen_at` se actualiza como máximo una vez por minuto para no escribir en cada polling.
+- **Layouts:** `queue` muestra solo llamados, `mixed` muestra llamados y multimedia, `media` muestra solo la playlist.
+- **Anuncio:** la pantalla compara cada snapshot con el anterior. Un ticket nuevo en `calling` o un rellamado (cambio de `call_count`) dispara la secuencia timbre → voz. El primer snapshot no anuncia para evitar repetir llamados al abrir o recargar.
+- **Audio:** el timbre se genera con Web Audio API (dos tonos) y la voz con `speechSynthesis`; no hay archivos de audio ni dependencias nuevas. El botón “Activar audio” desbloquea el contexto de audio y guarda la preferencia en `localStorage`.
+- **Privacidad:** la pantalla pública no recibe datos personales; solo código, número, ventanilla, estado y etiqueta de servicio del ticket.
+- **Endpoints:** `apiResource` de `/api/v1/admin/media`, `/api/v1/admin/playlists` y `/api/v1/admin/displays`; `POST /api/v1/admin/displays/{display}/token`; `GET /api/v1/display/snapshot?display={token}`.
+
 ---
 
 ## 16. Primeros pasos concretos
@@ -1090,7 +1168,8 @@ Decisiones adoptadas al implementar la Fase 4:
 7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 71 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/admin/ajustes` y API.
 8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado, transferencia, reimpresión y fallo de impresión.
 9. ~~Implementar prioridades configurables 2:1, aging, servicios exclusivos, autorización por servicio y autenticación (Fase 4).~~ Completado el 2026-11-06: 127 pruebas en verde (T-PRIO, T-SVC y T-AUTH) y smoke test de `/login`, `/quiosco`, `/pantalla`, `/consola`, `/admin/ajustes`, prioridades, servicios y simulador.
-10. Comenzar la Fase 5: administración completa (secciones, ventanillas, operadores, impresoras y matriz), reportes, multimedia y anuncio por voz.
+10. ~~Implementar la Fase 5: administración completa, reportes, retención, multimedia y anuncio por voz.~~ Completado el 2026-11-06 en tres entregas: 5A (`f95d465`), 5B (`ebbcaea`) y 5C (multimedia, pantallas y voz). Suite final: 159 pruebas y 722 aserciones.
+11. Iniciar la Fase 6: pruebas de carga, caos, seguridad, respaldos, runbooks y piloto en una sola sección.
 
 ---
 
@@ -1105,6 +1184,10 @@ Decisiones adoptadas al implementar la Fase 4:
 | Contenedor `unhealthy` | Inicialización lenta o error de arranque | `docker compose logs mysql` |
 | WebSocket no conecta | Reverb detenido o `BROADCAST_CONNECTION` distinto de `reverb` | Ejecutar `php artisan reverb:start` y ajustar `.env` |
 | La impresión falla | Servicio local no disponible o QZ Tray sin conexión | Revisar `VITE_PRINT_SERVICE_URL`, iniciar el servicio o QZ Tray |
+| Las imágenes o videos no cargan | Falta el enlace simbólico del disco público | Ejecutar `php artisan storage:link` |
+| La pantalla no anuncia por voz | Audio bloqueado por el navegador o sin voz instalada | Pulsar “Activar audio”; revisar las voces del sistema operativo |
+| El enlace de la pantalla dejó de funcionar | Token regenerado desde administración | Copiar el enlace actualizado desde el panel de pantallas |
+| La exportación queda en “En cola” | No hay worker de cola | Ejecutar `php artisan queue:work` |
 | `npm run build` no refleja cambios | Manifest de Vite desactualizado | Ejecutar `npm run build` o `npm run dev` |
 | El cierre no se ejecuta | Scheduler detenido o hora configurada posterior a la actual | Revisar `php artisan schedule:work` y la hora en `/admin/ajustes` |
 | El cierre se ejecutó antes de tiempo | Hora mal configurada o uso de `--force` | Corregir la hora; `--force` omite la comprobación horaria |

@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminDisplayController;
 use App\Http\Controllers\Api\V1\AdminKioskDeviceController;
+use App\Http\Controllers\Api\V1\AdminMediaAssetController;
+use App\Http\Controllers\Api\V1\AdminPlaylistController;
 use App\Http\Controllers\Api\V1\AdminPrinterController;
 use App\Http\Controllers\Api\V1\AdminReportController;
 use App\Http\Controllers\Api\V1\AdminSectionController;
@@ -70,6 +73,15 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->only(['index', 'store', 'update', 'destroy']);
             Route::apiResource('printers', AdminPrinterController::class)
                 ->only(['index', 'store', 'update', 'destroy']);
+            Route::apiResource('media', AdminMediaAssetController::class)
+                ->parameters(['media' => 'mediaAsset'])
+                ->only(['index', 'store', 'update', 'destroy']);
+            Route::apiResource('playlists', AdminPlaylistController::class)
+                ->only(['index', 'store', 'update', 'destroy']);
+            Route::apiResource('displays', AdminDisplayController::class)
+                ->only(['index', 'store', 'update', 'destroy']);
+            Route::post('displays/{display}/token', [AdminDisplayController::class, 'rotateToken'])
+                ->name('displays.token');
             Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
 
             Route::get('reports/summary', [AdminReportController::class, 'summary'])->name('reports.summary');

@@ -2,7 +2,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { api, type PriorityProfilePayload, type ServicePayload } from '../../shared/api/client';
 import AuditPanel from './components/AuditPanel.vue';
+import DisplaysPanel from './components/DisplaysPanel.vue';
 import KiosksPanel from './components/KiosksPanel.vue';
+import MediaPanel from './components/MediaPanel.vue';
+import PlaylistsPanel from './components/PlaylistsPanel.vue';
 import PrintersPanel from './components/PrintersPanel.vue';
 import ReportsPanel from './components/ReportsPanel.vue';
 import SectionsPanel from './components/SectionsPanel.vue';
@@ -18,7 +21,7 @@ import type {
     SimulatedQueue,
 } from '../../shared/types/api';
 
-type Tab = 'settings' | 'priorities' | 'services' | 'simulator' | 'sections' | 'stations' | 'users' | 'kiosks' | 'printers' | 'audit' | 'reports';
+type Tab = 'settings' | 'priorities' | 'services' | 'simulator' | 'sections' | 'stations' | 'users' | 'kiosks' | 'printers' | 'media' | 'playlists' | 'displays' | 'audit' | 'reports';
 
 interface ProfileForm {
     name: string;
@@ -57,6 +60,9 @@ const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'users', label: 'Usuarios' },
     { id: 'kiosks', label: 'Quioscos' },
     { id: 'printers', label: 'Impresoras' },
+    { id: 'media', label: 'Contenidos' },
+    { id: 'playlists', label: 'Playlists' },
+    { id: 'displays', label: 'Pantallas' },
     { id: 'audit', label: 'Auditoría' },
     { id: 'reports', label: 'Reportes' },
     { id: 'simulator', label: 'Simulador' },
@@ -839,6 +845,9 @@ function describeError(exception: unknown): string {
             <UsersPanel v-else-if="activeTab === 'users'" />
             <KiosksPanel v-else-if="activeTab === 'kiosks'" />
             <PrintersPanel v-else-if="activeTab === 'printers'" />
+            <MediaPanel v-else-if="activeTab === 'media'" />
+            <PlaylistsPanel v-else-if="activeTab === 'playlists'" />
+            <DisplaysPanel v-else-if="activeTab === 'displays'" />
             <AuditPanel v-else-if="activeTab === 'audit'" />
             <ReportsPanel v-else-if="activeTab === 'reports'" />
         </div>
