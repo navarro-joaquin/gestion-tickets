@@ -1,0 +1,1961 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Decisiones bloqueantes — Sistema de tickets</title>
+  <style>
+    :root {
+      --bg: #f3f6f8;
+      --surface: #ffffff;
+      --text: #17212b;
+      --muted: #5b6b7a;
+      --border: #d8e0e7;
+      --primary: #0b5563;
+      --primary-strong: #08414c;
+      --primary-soft: #e6f1f3;
+      --accent: #b45309;
+      --danger: #b42318;
+      --danger-soft: #fef3f2;
+      --success: #067647;
+      --success-soft: #ecfdf3;
+      --radius: 14px;
+      --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .06);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    [hidden] { display: none !important; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .progress-wrap {
+      flex: 1;
+      max-width: 420px;
+      display: grid;
+      gap: 6px;
+    }
+
+    #progress-text {
+      font-size: .78rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .progress-track {
+      height: 7px;
+      background: #e7edf1;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--primary), #2a8a9c);
+      border-radius: inherit;
+      transition: width .25s ease;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 36px 24px 72px;
+    }
+
+    .intro { margin-bottom: 28px; }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--primary);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      line-height: 1.12;
+      letter-spacing: -.035em;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+
+    .intro-list {
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+
+    .intro-list li {
+      position: relative;
+      padding-left: 24px;
+      color: #344454;
+      font-size: .93rem;
+    }
+
+    .intro-list li::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: .55em;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px 28px;
+      margin-bottom: 18px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .step {
+      flex: 0 0 34px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--primary-soft);
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+      font-size: .9rem;
+      font-weight: 800;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.18rem;
+      letter-spacing: -.015em;
+    }
+
+    .card-header p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .muted { color: var(--muted); }
+    .req { color: var(--accent); }
+
+    .notice {
+      border-left: 4px solid var(--accent);
+      background: #fff8ef;
+      color: #6b3f0d;
+      border-radius: 0 10px 10px 0;
+      padding: 12px 16px;
+      font-size: .89rem;
+      margin-bottom: 18px;
+    }
+
+    .notice strong { color: #4a2a06; }
+
+    .alert {
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      font-size: .9rem;
+    }
+
+    .alert-error {
+      background: var(--danger-soft);
+      border: 1px solid #f4b8b3;
+      color: #7a1a12;
+    }
+
+    .alert ul { margin: 8px 0 0; padding-left: 20px; }
+    .alert li { margin: 3px 0; }
+
+    .btn {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font: inherit;
+      font-size: .92rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, transform .05s ease;
+    }
+
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: 3px solid rgba(11, 85, 99, .28); outline-offset: 2px; }
+
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-strong); }
+
+    .btn-secondary { background: #fff; border-color: var(--border); color: var(--text); }
+    .btn-secondary:hover { border-color: #aebcc8; background: #f8fafb; }
+
+    .btn-ghost { background: transparent; color: var(--muted); }
+    .btn-ghost:hover { color: var(--danger); background: var(--danger-soft); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    @media (max-width: 760px) {
+      .topbar-inner { flex-direction: column; align-items: stretch; gap: 10px; }
+      #progress-text { text-align: left; }
+      .page { padding: 24px 14px 56px; }
+      .card { padding: 20px 18px; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+    legend { padding: 0; }
+
+    .field { margin-bottom: 18px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .field > label,
+    .field > .label {
+      display: block;
+      font-weight: 700;
+      font-size: .92rem;
+      margin-bottom: 7px;
+    }
+
+    .hint {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: .81rem;
+      font-weight: 400;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    input[type="time"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: .93rem;
+    }
+
+    textarea { min-height: 96px; resize: vertical; }
+
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid rgba(11, 85, 99, .22);
+      outline-offset: 1px;
+      border-color: var(--primary);
+    }
+
+    input.is-invalid,
+    select.is-invalid,
+    textarea.is-invalid {
+      border-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .field-error {
+      margin: 6px 0 0;
+      min-height: 1em;
+      color: var(--danger);
+      font-size: .81rem;
+      font-weight: 600;
+    }
+
+    .options { display: grid; gap: 9px; }
+
+    .option {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .12s ease, background .12s ease;
+    }
+
+    .option:hover { border-color: #b6c5d0; }
+
+    .option:has(input:checked) {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .option input {
+      margin: 3px 0 0;
+      accent-color: var(--primary);
+      flex: 0 0 auto;
+    }
+
+    .option strong {
+      display: block;
+      font-size: .92rem;
+      line-height: 1.35;
+    }
+
+    .option span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: .81rem;
+    }
+
+    .option.is-invalid { border-color: var(--danger); background: var(--danger-soft); }
+
+    .mapping-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    @media (max-width: 940px) {
+      .mapping-grid { grid-template-columns: 1fr; }
+    }
+
+    .mapping-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fbfcfd;
+      padding: 16px;
+    }
+
+    .mapping-card h3 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    .mapping-card .codes {
+      margin: 4px 0 14px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .mapping-card .field { margin-bottom: 12px; }
+
+    .preview {
+      margin-top: 12px;
+      padding: 10px 12px;
+      min-height: 72px;
+      border-radius: 9px;
+      background: #eef4f6;
+      color: var(--muted);
+      font-size: .8rem;
+      display: grid;
+      gap: 3px;
+      align-content: start;
+    }
+
+    .preview strong { color: var(--text); }
+
+    .preview .ticket-row {
+      display: block;
+      padding: 2px 0;
+      border-bottom: 1px dashed #d3e0e5;
+    }
+
+    .preview .ticket-row:last-child { border-bottom: 0; }
+
+    .preview-error {
+      background: var(--danger-soft);
+      color: #7a1a12;
+      font-weight: 600;
+    }
+
+    .form-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 8px 2px 4px;
+    }
+
+    .form-actions .spacer { flex: 1; }
+
+    .answers {
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) 1fr;
+      gap: 8px 18px;
+      margin: 0;
+      font-size: .91rem;
+    }
+
+    .answers dt { color: var(--muted); font-weight: 600; }
+    .answers dd { margin: 0; }
+
+    @media (max-width: 640px) {
+      .answers { grid-template-columns: 1fr; gap: 2px; }
+      .answers dd { margin-bottom: 10px; }
+    }
+    .result {
+      margin-top: 28px;
+      padding: 28px;
+      border: 1px solid #b7e4c7;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #f7fef9, #ffffff 220px);
+      box-shadow: var(--shadow);
+    }
+
+    .result-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .result h2 {
+      margin: 0;
+      font-size: 1.45rem;
+      letter-spacing: -.02em;
+    }
+
+    .result h3 {
+      margin: 26px 0 10px;
+      font-size: 1.02rem;
+    }
+
+    .result-meta { margin: 4px 0 0; color: var(--muted); font-size: .88rem; }
+
+    .badge {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--success-soft);
+      color: var(--success);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 0 6px;
+      border-top: 1px solid #d9efe2;
+      border-bottom: 1px solid #d9efe2;
+      margin-bottom: 8px;
+    }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+
+    .summary-table th,
+    .summary-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .summary-table th {
+      background: #f4f8f9;
+      color: #344454;
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .summary-table td:not(:first-child) {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .json-details {
+      margin-top: 22px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px 14px;
+    }
+
+    .json-details summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: .88rem;
+    }
+
+    .json-details pre {
+      margin: 12px 0 4px;
+      padding: 14px;
+      max-height: 320px;
+      overflow: auto;
+      background: #0f1a20;
+      color: #d7e6ec;
+      border-radius: 8px;
+      font-size: .76rem;
+      line-height: 1.45;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      z-index: 50;
+      padding: 11px 18px;
+      border-radius: 999px;
+      background: #10262e;
+      color: #fff;
+      font-size: .86rem;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(16, 38, 46, .25);
+    }
+
+    .site-footer {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px 40px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .site-footer p { margin: 2px 0; }
+
+    @media print {
+      body { background: #fff; }
+      .topbar,
+      .intro,
+      form,
+      .site-footer,
+      .result-actions,
+      .no-print,
+      .toast { display: none !important; }
+      .page { max-width: none; padding: 0; }
+      .result {
+        display: block !important;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+        background: #fff;
+      }
+      .summary-table th { background: #f2f2f2; }
+      .json-details { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="brand-mark">GT</span> Gestión de Tickets</div>
+    <div class="progress-wrap">
+      <span id="progress-text">0 de 8 pasos completos</span>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0" aria-label="Progreso del formulario">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+<section class="intro">
+    <p class="eyebrow">Fase 0 · Antes de implementar</p>
+    <h1>Decisiones bloqueantes del sistema de tickets</h1>
+    <p class="lead">
+      Responde estas preguntas con el equipo de negocio. El formulario valida la coherencia de la matriz
+      de códigos, calcula el avance y genera un acta en JSON y Markdown para adjuntar al proyecto.
+    </p>
+    <ul class="intro-list">
+      <li>No se preselecciona ninguna letra: A, D y G tampoco se asumen como general.</li>
+      <li>Los datos se guardan solo en este navegador; no se envían a ningún servidor.</li>
+      <li>El borrador se guarda en este navegador cuando el navegador lo permite.</li>
+    </ul>
+  </section>
+
+<form id="decision-form" novalidate>
+<div id="error-summary" class="alert alert-error" role="alert" hidden>
+    <strong>Revisa lo siguiente antes de continuar:</strong>
+    <ul id="error-list"></ul>
+  </div>
+<section class="card" aria-labelledby="step-1">
+    <div class="card-header">
+      <span class="step">1</span>
+      <div>
+        <h2 id="step-1">Identificación de la sesión</h2>
+        <p>Quién valida y cuándo. Estos datos encabezan el acta.</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="meeting_date">Fecha de la reunión <span class="req">*</span></label>
+        <input type="date" id="meeting_date" name="meeting_date">
+        <p class="field-error" data-error-for="meeting_date"></p>
+      </div>
+      <div class="field">
+        <label for="facilitator">Responsable de la validación <span class="req">*</span></label>
+        <input type="text" id="facilitator" name="facilitator" autocomplete="name" placeholder="Nombre y cargo">
+        <p class="field-error" data-error-for="facilitator"></p>
+      </div>
+    </div>
+    <div class="field">
+      <label for="participants">Participantes</label>
+      <input type="text" id="participants" name="participants" placeholder="Áreas o nombres (opcional)">
+      <span class="hint">Sirve para dejar constancia de quién participó en la decisión.</span>
+    </div>
+  </section>
+<section class="card" aria-labelledby="step-2">
+    <div class="card-header">
+      <span class="step">2</span>
+      <div>
+        <h2 id="step-2">Matriz de códigos por sección</h2>
+        <p>Asigna cada letra a un solo slot. Los tres códigos deben usarse exactamente una vez.</p>
+      </div>
+    </div>
+
+    <div class="notice">
+      <strong>No hay letras preseleccionadas.</strong> El sistema no asumirá que A, D o G son general.
+      Si el acuerdo previo ya lo definió así, selecciónalo aquí y quedará registrado en el acta.
+    </div>
+
+    <div class="mapping-grid">
+      <article class="mapping-card">
+        <h3>Plataforma de Atención al Cliente</h3>
+        <p class="codes">Códigos disponibles: A, B, C</p>
+
+        <div class="field">
+          <label for="map-plataforma-general">General
+            <span class="hint">Atención general</span>
+          </label>
+          <select id="map-plataforma-general" name="map_plataforma_general" data-section="plataforma" data-slot="general">
+            <option value="">Selecciona un código…</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-plataforma-pregnancy">Mujeres embarazadas
+            <span class="hint">Categoría preferencial</span>
+          </label>
+          <select id="map-plataforma-pregnancy" name="map_plataforma_pregnancy" data-section="plataforma" data-slot="pregnancy">
+            <option value="">Selecciona un código…</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-plataforma-shared_preferential">Tercera edad + Discapacidad
+            <span class="hint">Comparten código y serie; categorías separadas</span>
+          </label>
+          <select id="map-plataforma-shared_preferential" name="map_plataforma_shared_preferential" data-section="plataforma" data-slot="shared_preferential">
+            <option value="">Selecciona un código…</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+
+        <div class="preview" id="preview-plataforma" aria-live="polite"></div>
+        <p class="field-error" data-error-for="mapping-plataforma"></p>
+      </article>
+      <article class="mapping-card">
+        <h3>ODECO</h3>
+        <p class="codes">Códigos disponibles: D, E, F</p>
+
+        <div class="field">
+          <label for="map-odeco-general">General
+            <span class="hint">Atención general</span>
+          </label>
+          <select id="map-odeco-general" name="map_odeco_general" data-section="odeco" data-slot="general">
+            <option value="">Selecciona un código…</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-odeco-pregnancy">Mujeres embarazadas
+            <span class="hint">Categoría preferencial</span>
+          </label>
+          <select id="map-odeco-pregnancy" name="map_odeco_pregnancy" data-section="odeco" data-slot="pregnancy">
+            <option value="">Selecciona un código…</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-odeco-shared_preferential">Tercera edad + Discapacidad
+            <span class="hint">Comparten código y serie; categorías separadas</span>
+          </label>
+          <select id="map-odeco-shared_preferential" name="map_odeco_shared_preferential" data-section="odeco" data-slot="shared_preferential">
+            <option value="">Selecciona un código…</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+          </select>
+        </div>
+
+        <div class="preview" id="preview-odeco" aria-live="polite"></div>
+        <p class="field-error" data-error-for="mapping-odeco"></p>
+      </article>
+
+      <article class="mapping-card">
+        <h3>Cajas</h3>
+        <p class="codes">Códigos disponibles: G, H, I</p>
+
+        <div class="field">
+          <label for="map-cajas-general">General
+            <span class="hint">Atención general</span>
+          </label>
+          <select id="map-cajas-general" name="map_cajas_general" data-section="cajas" data-slot="general">
+            <option value="">Selecciona un código…</option>
+            <option value="G">G</option>
+            <option value="H">H</option>
+            <option value="I">I</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-cajas-pregnancy">Mujeres embarazadas
+            <span class="hint">Categoría preferencial</span>
+          </label>
+          <select id="map-cajas-pregnancy" name="map_cajas_pregnancy" data-section="cajas" data-slot="pregnancy">
+            <option value="">Selecciona un código…</option>
+            <option value="G">G</option>
+            <option value="H">H</option>
+            <option value="I">I</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="map-cajas-shared_preferential">Tercera edad + Discapacidad
+            <span class="hint">Comparten código y serie; categorías separadas</span>
+          </label>
+          <select id="map-cajas-shared_preferential" name="map_cajas_shared_preferential" data-section="cajas" data-slot="shared_preferential">
+            <option value="">Selecciona un código…</option>
+            <option value="G">G</option>
+            <option value="H">H</option>
+            <option value="I">I</option>
+          </select>
+        </div>
+
+        <div class="preview" id="preview-cajas" aria-live="polite"></div>
+        <p class="field-error" data-error-for="mapping-cajas"></p>
+      </article>
+    </div>
+  </section>
+<section class="card" aria-labelledby="step-3">
+    <div class="card-header">
+      <span class="step">3</span>
+      <div>
+        <h2 id="step-3">Numeración y reinicio</h2>
+        <p>Define el periodo de la serie independiente de cada sección y código.</p>
+      </div>
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">¿Cuándo se reinicia la numeración? <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="numbering_mode" value="daily">
+          <span><strong>Diario</strong><span>La serie vuelve a 001 al inicio de cada día.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="numbering_mode" value="shift">
+          <span><strong>Por turno</strong><span>La serie vuelve a 001 en cada turno.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="numbering_mode" value="continuous">
+          <span><strong>Continuo</strong><span>La serie no se reinicia; el número crece indefinidamente.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="numbering_mode" value="other">
+          <span><strong>Otro</strong><span>Regla distinta; se describe abajo.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="numbering_mode"></p>
+    </fieldset>
+
+    <div class="grid-2">
+      <div class="field" id="numbering-time-field">
+        <label id="numbering-time-label" for="numbering_time">Hora de reinicio <span class="req">*</span></label>
+        <input type="time" id="numbering_time" name="numbering_time">
+        <span class="hint">Hora local de operación.</span>
+        <p class="field-error" data-error-for="numbering_time"></p>
+      </div>
+      <div class="field">
+        <label for="numbering_timezone">Zona horaria <span class="req">*</span></label>
+        <input type="text" id="numbering_timezone" name="numbering_timezone" placeholder="America/Mexico_City" autocomplete="off">
+        <span class="hint">Formato IANA. Ej.: America/Mexico_City, America/Bogota.</span>
+        <p class="field-error" data-error-for="numbering_timezone"></p>
+      </div>
+    </div>
+
+    <div class="field" id="numbering-shift-notes-field" hidden>
+      <label for="numbering_shift_notes">Turnos y horarios <span class="req">*</span></label>
+      <textarea id="numbering_shift_notes" name="numbering_shift_notes" placeholder="Ej.: Mañana 07:00–14:00, Tarde 14:00–20:00"></textarea>
+      <p class="field-error" data-error-for="numbering_shift_notes"></p>
+    </div>
+
+    <div class="field" id="numbering-other-field" hidden>
+      <label for="numbering_other">Describe la regla de numeración <span class="req">*</span></label>
+      <textarea id="numbering_other" name="numbering_other" placeholder="Explica claramente cuándo cambia la serie y qué la reinicia."></textarea>
+      <p class="field-error" data-error-for="numbering_other"></p>
+    </div>
+  </section>
+<section class="card" aria-labelledby="step-4">
+    <div class="card-header">
+      <span class="step">4</span>
+      <div>
+        <h2 id="step-4">Tickets de servicios exclusivos</h2>
+        <p>Por ejemplo, cobro de dividendos en temporada, asignado a operadores autorizados.</p>
+      </div>
+    </div>
+
+    <div class="notice">
+      El diseño base fija <strong>tres códigos por sección</strong>. Si el servicio usa una serie propia,
+      se necesita una decisión adicional sobre el código visible y la numeración.
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">¿Qué código y serie usan estos tickets? <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="service_ticket_mode" value="general_code">
+          <span><strong>Código general de la sección + etiqueta de servicio</strong>
+            <span>Comparte la serie general; el ticket muestra el nombre del servicio.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="service_ticket_mode" value="own_series">
+          <span><strong>Serie propia por servicio</strong>
+            <span>Requiere definir prefijo, código visible y regla de numeración.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="service_ticket_mode" value="other">
+          <span><strong>Otra regla</strong><span>Se detalla abajo.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="service_ticket_mode"></p>
+    </fieldset>
+
+    <div class="field" id="service-notes-field" hidden>
+      <label for="service_ticket_notes">Detalle de la serie o regla <span class="req">*</span></label>
+      <textarea id="service_ticket_notes" name="service_ticket_notes" placeholder="Ej.: prefijo S, serie S-001 independiente por servicio, visible en pantalla y ticket."></textarea>
+      <p class="field-error" data-error-for="service_ticket_notes"></p>
+    </div>
+  </section>
+<section class="card" aria-labelledby="step-5">
+    <div class="card-header">
+      <span class="step">5</span>
+      <div>
+        <h2 id="step-5">Política de no presentado</h2>
+        <p>Define cuándo se cierra un ticket llamado y qué ocurre después.</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label for="no_show_calls">Llamados antes de cerrar <span class="req">*</span></label>
+        <input type="number" id="no_show_calls" name="no_show_calls" min="1" max="5" step="1" inputmode="numeric" placeholder="2">
+        <span class="hint">Entre 1 y 5 llamados.</span>
+        <p class="field-error" data-error-for="no_show_calls"></p>
+      </div>
+      <div class="field">
+        <label for="no_show_minutes">Minutos de espera tras el último llamado <span class="req">*</span></label>
+        <input type="number" id="no_show_minutes" name="no_show_minutes" min="1" max="60" step="1" inputmode="numeric" placeholder="3">
+        <span class="hint">Entre 1 y 60 minutos.</span>
+        <p class="field-error" data-error-for="no_show_minutes"></p>
+      </div>
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">¿Qué ocurre al cumplirse la política? <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="no_show_action" value="close">
+          <span><strong>Cerrar como no presentado</strong><span>El ticket termina y no vuelve a la cola.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="no_show_action" value="requeue_penalty">
+          <span><strong>Devolver a la cola con penalización</strong><span>Vuelve a esperar, pero pierde prioridad.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="no_show_action" value="requeue_no_penalty">
+          <span><strong>Devolver a la cola sin penalización</strong><span>Conserva su prioridad original.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="no_show_action"></p>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend class="label">¿Quién puede reencolar manualmente? <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="requeue_roles" value="supervisor">
+          <span><strong>Supervisor</strong><span>Solo supervisores de la sección.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="requeue_roles" value="admin">
+          <span><strong>Administrador</strong><span>Solo administración.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="requeue_roles" value="both">
+          <span><strong>Supervisor y administrador</strong><span>Ambos perfiles pueden hacerlo.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="requeue_roles" value="none">
+          <span><strong>Nadie</strong><span>Solo el sistema, según la regla automática.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="requeue_roles"></p>
+    </fieldset>
+  </section>
+<section class="card" aria-labelledby="step-6">
+    <div class="card-header">
+      <span class="step">6</span>
+      <div>
+        <h2 id="step-6">Operadores y secciones</h2>
+        <p>Define si un operador puede atender más de una sección en la misma jornada.</p>
+      </div>
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">¿Cómo se asigna un operador a las secciones? <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="operator_sections_mode" value="single_section">
+          <span><strong>Una sola sección por jornada</strong>
+            <span>El operador trabaja toda la jornada en la misma sección.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="operator_sections_mode" value="switch_section">
+          <span><strong>Puede cambiar de sección durante la jornada</strong>
+            <span>Debe cerrar la asignación anterior; el cambio queda en historial.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="operator_sections_mode" value="multi_section">
+          <span><strong>Puede atender varias secciones simultáneamente</strong>
+            <span>No recomendado: complica prioridades, ventanillas y auditoría.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="operator_sections_mode" value="other">
+          <span><strong>Otra regla</strong><span>Se detalla abajo.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="operator_sections_mode"></p>
+    </fieldset>
+
+    <div class="field" id="operator-other-field" hidden>
+      <label for="operator_sections_other">Describe la regla <span class="req">*</span></label>
+      <textarea id="operator_sections_other" name="operator_sections_other" placeholder="Ej.: puede cubrir otra sección solo por relevo autorizado por supervisor."></textarea>
+      <p class="field-error" data-error-for="operator_sections_other"></p>
+    </div>
+  </section>
+<section class="card" aria-labelledby="step-7">
+    <div class="card-header">
+      <span class="step">7</span>
+      <div>
+        <h2 id="step-7">Cierre de la jornada</h2>
+        <p>Qué pasa con la cola y con los tickets que ya fueron llamados.</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label for="opening_time">Hora de apertura <span class="req">*</span></label>
+        <input type="time" id="opening_time" name="opening_time">
+        <span class="hint">Hora local de operación.</span>
+        <p class="field-error" data-error-for="opening_time"></p>
+      </div>
+      <div class="field">
+        <label for="closing_time">Hora de cierre <span class="req">*</span></label>
+        <input type="time" id="closing_time" name="closing_time">
+        <span class="hint">Hora local de operación.</span>
+        <p class="field-error" data-error-for="closing_time"></p>
+      </div>
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">Tickets en espera al cierre <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="closing_waiting_action" value="expire">
+          <span><strong>Expiran</strong><span>Se cierran y no se atienden al día siguiente.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="closing_waiting_action" value="carry_over">
+          <span><strong>Se conservan para el siguiente día operativo</strong><span>Mantienen su número y prioridad.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="closing_waiting_action" value="manual">
+          <span><strong>Decisión manual del supervisor</strong><span>Se revisa caso por caso antes de cerrar.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="closing_waiting_action"></p>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend class="label">Tickets llamados o en atención al cierre <span class="req">*</span></legend>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="closing_active_action" value="finish">
+          <span><strong>Se finalizan</strong><span>Se cierran como atendidos al terminar la jornada.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="closing_active_action" value="cancel">
+          <span><strong>Se cancelan</strong><span>Se cierran con motivo de cierre de jornada.</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="closing_active_action" value="manual">
+          <span><strong>Decisión manual del supervisor</strong><span>Se resuelven uno por uno.</span></span>
+        </label>
+      </div>
+      <p class="field-error" data-error-for="closing_active_action"></p>
+    </fieldset>
+  </section>
+<section class="card" aria-labelledby="step-8">
+    <div class="card-header">
+      <span class="step">8</span>
+      <div>
+        <h2 id="step-8">Confirmación y notas</h2>
+        <p>La confirmación es obligatoria para generar el acta.</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="option">
+        <input type="checkbox" id="confirm_mapping" name="confirm_mapping">
+        <span>
+          <strong>Confirmo que estas respuestas reflejan el acuerdo vigente</strong>
+          <span>No se asignó ninguna letra por suposición y la matriz fue revisada con negocio.</span>
+        </span>
+      </label>
+      <p class="field-error" data-error-for="confirm_mapping"></p>
+    </div>
+
+    <div class="field">
+      <label for="notes">Notas, evidencia o acuerdos adicionales</label>
+      <textarea id="notes" name="notes" placeholder="Enlaces al acta, correos, restricciones operativas, acuerdos pendientes…"></textarea>
+      <span class="hint">Opcional. Se incluye en el JSON y en el Markdown exportado.</span>
+    </div>
+  </section>
+<div class="form-actions">
+    <button type="submit" class="btn btn-primary">Validar y generar acta</button>
+    <button type="button" id="clear-btn" class="btn btn-ghost">Borrar respuestas</button>
+    <span class="spacer"></span>
+    <span class="muted" style="font-size:.8rem">Los campos con <span class="req">*</span> son obligatorios.</span>
+  </div>
+</form>
+
+<section id="result" class="result" hidden aria-live="polite">
+    <div class="result-header">
+      <div>
+        <p class="eyebrow">Acta generada</p>
+        <h2>Decisiones listas para revisión</h2>
+        <p id="result-meta" class="result-meta"></p>
+      </div>
+      <span class="badge">Completo</span>
+    </div>
+
+    <div class="result-actions no-print">
+      <button type="button" id="download-json" class="btn btn-primary">Descargar JSON</button>
+      <button type="button" id="download-md" class="btn btn-secondary">Descargar Markdown</button>
+      <button type="button" id="copy-md" class="btn btn-secondary">Copiar resumen</button>
+      <button type="button" id="print-result" class="btn btn-ghost">Imprimir / PDF</button>
+    </div>
+
+    <h3>Matriz de códigos</h3>
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>Sección</th>
+          <th>General</th>
+          <th>Embarazo</th>
+          <th>Preferencial compartido</th>
+        </tr>
+      </thead>
+      <tbody id="result-mapping"></tbody>
+    </table>
+
+    <h3>Respuestas</h3>
+    <dl id="result-answers" class="answers"></dl>
+
+    <details class="json-details no-print">
+      <summary>Ver JSON exportable</summary>
+      <pre id="json-preview"></pre>
+    </details>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>El borrador se guarda solo en este navegador; no se envían datos a ningún servidor.</p>
+  <p>Documento de trabajo para la Fase 0 del proyecto <strong>gestion-tickets</strong>.</p>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'gestion-tickets-decisiones-v1';
+
+  const SECTIONS = [
+    { key: 'plataforma', name: 'Plataforma de Atención al Cliente' },
+    { key: 'odeco', name: 'ODECO' },
+    { key: 'cajas', name: 'Cajas' }
+  ];
+
+  const LABELS = {
+    numbering_mode: {
+      daily: 'Diario',
+      shift: 'Por turno',
+      continuous: 'Continuo',
+      other: 'Otro'
+    },
+    service_ticket_mode: {
+      general_code: 'Código general de la sección + etiqueta de servicio',
+      own_series: 'Serie propia por servicio',
+      other: 'Otro'
+    },
+    no_show_action: {
+      close: 'Cerrar como no presentado',
+      requeue_penalty: 'Devolver a la cola con penalización',
+      requeue_no_penalty: 'Devolver a la cola sin penalización'
+    },
+    requeue_roles: {
+      supervisor: 'Supervisor',
+      admin: 'Administrador',
+      both: 'Supervisor y administrador',
+      none: 'Nadie (solo el sistema)'
+    },
+    operator_sections_mode: {
+      single_section: 'Una sola sección por jornada',
+      switch_section: 'Puede cambiar de sección durante la jornada',
+      multi_section: 'Puede atender varias secciones simultáneamente',
+      other: 'Otro'
+    },
+    closing_waiting_action: {
+      expire: 'Expiran al cierre',
+      carry_over: 'Se conservan para el siguiente día operativo',
+      manual: 'Decisión manual del supervisor'
+    },
+    closing_active_action: {
+      finish: 'Se finalizan',
+      cancel: 'Se cancelan',
+      manual: 'Decisión manual del supervisor'
+    }
+  };
+
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+  const val = (name) => {
+    const element = document.querySelector(`[name="${name}"]`);
+    return element ? element.value.trim() : '';
+  };
+
+  const checked = (name) => {
+    const element = document.querySelector(`[name="${name}"]:checked`);
+    return element ? element.value : '';
+  };
+
+  const labelFor = (group, value) => (LABELS[group] && LABELS[group][value]) || value || '—';
+
+  const form = $('#decision-form');
+  let currentJson = '';
+  let currentMarkdown = '';
+  let toastTimer = null;
+
+  function showToast(message) {
+    const toast = $('#toast');
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+    }, 2600);
+  }
+
+  function serializeForm() {
+    const data = {};
+    $$('input, select, textarea', form).forEach((element) => {
+      if (!element.name) {
+        return;
+      }
+      if (element.type === 'radio') {
+        if (element.checked) {
+          data[element.name] = element.value;
+        }
+      } else if (element.type === 'checkbox') {
+        data[element.name] = element.checked;
+      } else {
+        data[element.name] = element.value;
+      }
+    });
+    return data;
+  }
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeForm()));
+    } catch (error) {
+      // El navegador puede bloquear localStorage; el formulario sigue funcionando.
+    }
+  }
+
+  function restoreDraft() {
+    let data = null;
+    try {
+      data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    } catch (error) {
+      data = null;
+    }
+    if (!data) {
+      return;
+    }
+    Object.entries(data).forEach(([name, value]) => {
+      const elements = $$(`[name="${name}"]`, form);
+      if (!elements.length) {
+        return;
+      }
+      if (elements[0].type === 'radio') {
+        elements.forEach((element) => {
+          element.checked = element.value === value;
+        });
+      } else if (elements[0].type === 'checkbox') {
+        elements[0].checked = Boolean(value);
+      } else {
+        elements[0].value = value;
+      }
+    });
+  }
+
+  function setDefaultDate() {
+    const input = $('#meeting_date');
+    if (input.value) {
+      return;
+    }
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    input.value = local.toISOString().slice(0, 10);
+  }
+
+  function updateConditionals() {
+    const numberingMode = checked('numbering_mode');
+    const showTime = numberingMode === 'daily' || numberingMode === 'shift';
+    $('#numbering-time-field').hidden = !showTime;
+    $('#numbering-shift-notes-field').hidden = numberingMode !== 'shift';
+    $('#numbering-other-field').hidden = numberingMode !== 'other';
+    $('#numbering-time-label').textContent = numberingMode === 'shift'
+      ? 'Hora de inicio del turno *'
+      : 'Hora de reinicio *';
+
+    const serviceMode = checked('service_ticket_mode');
+    $('#service-notes-field').hidden = serviceMode !== 'own_series' && serviceMode !== 'other';
+
+    $('#operator-other-field').hidden = checked('operator_sections_mode') !== 'other';
+  }
+
+  function updateMappingPreviews() {
+    SECTIONS.forEach((section) => {
+      const general = val(`map_${section.key}_general`);
+      const pregnancy = val(`map_${section.key}_pregnancy`);
+      const shared = val(`map_${section.key}_shared_preferential`);
+      const preview = $(`#preview-${section.key}`);
+      if (!preview) {
+        return;
+      }
+
+      preview.replaceChildren();
+      preview.classList.remove('preview-error');
+
+      const values = [general, pregnancy, shared];
+      if (values.some((value) => !value)) {
+        preview.textContent = 'Faltan asignaciones.';
+        return;
+      }
+
+      const duplicates = values.filter((value, index) => values.indexOf(value) !== index);
+      if (duplicates.length) {
+        preview.textContent = `Código repetido: ${[...new Set(duplicates)].join(', ')}. Cada código debe usarse una vez.`;
+        preview.classList.add('preview-error');
+        return;
+      }
+
+      [
+        [`${general}-001`, 'Atención general'],
+        [`${pregnancy}-001`, 'Mujeres embarazadas'],
+        [`${shared}-001`, 'Tercera edad / Discapacidad']
+      ].forEach(([ticket, label]) => {
+        const row = document.createElement('span');
+        row.className = 'ticket-row';
+        const code = document.createElement('strong');
+        code.textContent = ticket;
+        row.append(code, document.createTextNode(` · ${label}`));
+        preview.append(row);
+      });
+    });
+  }
+
+  function clearError(field) {
+    const error = document.querySelector(`[data-error-for="${field}"]`);
+    if (error) {
+      error.textContent = '';
+    }
+
+    if (field.startsWith('mapping-')) {
+      const section = field.replace('mapping-', '');
+      $$(`[data-section="${section}"]`, form).forEach((element) => {
+        element.classList.remove('is-invalid');
+        element.setAttribute('aria-invalid', 'false');
+      });
+      return;
+    }
+
+    $$(`[name="${field}"]`, form).forEach((element) => {
+      element.classList.remove('is-invalid');
+      element.setAttribute('aria-invalid', 'false');
+      const option = element.closest('.option');
+      if (option) {
+        option.classList.remove('is-invalid');
+      }
+    });
+  }
+
+  function updateAll() {
+    updateConditionals();
+    updateMappingPreviews();
+    updateProgress();
+  }
+  function getMapping() {
+    const mapping = {};
+    SECTIONS.forEach((section) => {
+      mapping[section.key] = {
+        general: val(`map_${section.key}_general`),
+        pregnancy: val(`map_${section.key}_pregnancy`),
+        shared_preferential: val(`map_${section.key}_shared_preferential`)
+      };
+    });
+    return mapping;
+  }
+
+  function isIdentificationComplete() {
+    return Boolean(val('meeting_date') && val('facilitator'));
+  }
+
+  function isMappingComplete() {
+    const mapping = getMapping();
+    return SECTIONS.every((section) => {
+      const values = Object.values(mapping[section.key]);
+      return values.every(Boolean) && new Set(values).size === 3;
+    });
+  }
+
+  function isNumberingComplete() {
+    const mode = checked('numbering_mode');
+    if (!mode || !val('numbering_timezone')) {
+      return false;
+    }
+    if ((mode === 'daily' || mode === 'shift') && !val('numbering_time')) {
+      return false;
+    }
+    if (mode === 'shift' && !val('numbering_shift_notes')) {
+      return false;
+    }
+    if (mode === 'other' && !val('numbering_other')) {
+      return false;
+    }
+    return true;
+  }
+
+  function isServicesComplete() {
+    const mode = checked('service_ticket_mode');
+    if (!mode) {
+      return false;
+    }
+    if ((mode === 'own_series' || mode === 'other') && !val('service_ticket_notes')) {
+      return false;
+    }
+    return true;
+  }
+
+  function isNoShowComplete() {
+    const calls = Number(val('no_show_calls'));
+    const minutes = Number(val('no_show_minutes'));
+    return Number.isInteger(calls) && calls >= 1 && calls <= 5 &&
+      Number.isInteger(minutes) && minutes >= 1 && minutes <= 60 &&
+      Boolean(checked('no_show_action') && checked('requeue_roles'));
+  }
+
+  function isOperatorsComplete() {
+    const mode = checked('operator_sections_mode');
+    if (!mode) {
+      return false;
+    }
+    if (mode === 'other' && !val('operator_sections_other')) {
+      return false;
+    }
+    return true;
+  }
+
+  function isClosingComplete() {
+    return Boolean(val('opening_time') && val('closing_time') && checked('closing_waiting_action') && checked('closing_active_action'));
+  }
+
+  function isConfirmed() {
+    return $('#confirm_mapping').checked;
+  }
+
+  function updateProgress() {
+    const checks = [
+      isIdentificationComplete(),
+      isMappingComplete(),
+      isNumberingComplete(),
+      isServicesComplete(),
+      isNoShowComplete(),
+      isOperatorsComplete(),
+      isClosingComplete(),
+      isConfirmed()
+    ];
+    const done = checks.filter(Boolean).length;
+    const total = checks.length;
+    $('#progress-text').textContent = `${done} de ${total} pasos completos`;
+    $('#progress-bar').style.width = `${Math.round((done / total) * 100)}%`;
+    const track = $('.progress-track');
+    track.setAttribute('aria-valuenow', String(done));
+    track.setAttribute('aria-valuemax', String(total));
+  }
+
+  function validate() {
+    const errors = [];
+    const add = (field, message) => errors.push({ field, message });
+
+    if (!val('meeting_date')) {
+      add('meeting_date', 'Indica la fecha de la reunión.');
+    }
+    if (!val('facilitator')) {
+      add('facilitator', 'Indica el nombre de quien valida.');
+    }
+
+    const mapping = getMapping();
+    SECTIONS.forEach((section) => {
+      const values = Object.values(mapping[section.key]);
+      if (values.some((value) => !value)) {
+        add(`mapping-${section.key}`, `Completa los tres códigos de ${section.name}.`);
+      } else if (new Set(values).size !== 3) {
+        add(`mapping-${section.key}`, `En ${section.name}, cada código debe usarse exactamente una vez.`);
+      }
+    });
+
+    const numberingMode = checked('numbering_mode');
+    if (!numberingMode) {
+      add('numbering_mode', 'Selecciona el modo de numeración.');
+    }
+    if (!val('numbering_timezone')) {
+      add('numbering_timezone', 'Indica la zona horaria en formato IANA.');
+    }
+    if ((numberingMode === 'daily' || numberingMode === 'shift') && !val('numbering_time')) {
+      add('numbering_time', 'Indica la hora de reinicio o de inicio del turno.');
+    }
+    if (numberingMode === 'shift' && !val('numbering_shift_notes')) {
+      add('numbering_shift_notes', 'Describe los turnos y sus horarios.');
+    }
+    if (numberingMode === 'other' && !val('numbering_other')) {
+      add('numbering_other', 'Describe la regla de numeración.');
+    }
+
+    const serviceMode = checked('service_ticket_mode');
+    if (!serviceMode) {
+      add('service_ticket_mode', 'Selecciona cómo se numeran los servicios exclusivos.');
+    }
+    if ((serviceMode === 'own_series' || serviceMode === 'other') && !val('service_ticket_notes')) {
+      add('service_ticket_notes', 'Detalla la serie o la regla elegida.');
+    }
+
+    const calls = Number(val('no_show_calls'));
+    const minutes = Number(val('no_show_minutes'));
+    if (!Number.isInteger(calls) || calls < 1 || calls > 5) {
+      add('no_show_calls', 'Indica un número entero entre 1 y 5.');
+    }
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
+      add('no_show_minutes', 'Indica un número entero entre 1 y 60.');
+    }
+    if (!checked('no_show_action')) {
+      add('no_show_action', 'Selecciona qué ocurre al cumplirse la política.');
+    }
+    if (!checked('requeue_roles')) {
+      add('requeue_roles', 'Selecciona quién puede reencolar.');
+    }
+
+    const operatorMode = checked('operator_sections_mode');
+    if (!operatorMode) {
+      add('operator_sections_mode', 'Selecciona cómo se asignan las secciones.');
+    }
+    if (operatorMode === 'other' && !val('operator_sections_other')) {
+      add('operator_sections_other', 'Describe la regla de asignación.');
+    }
+
+    if (!val('opening_time')) {
+      add('opening_time', 'Indica la hora de apertura.');
+    }
+    if (!val('closing_time')) {
+      add('closing_time', 'Indica la hora de cierre.');
+    }
+    if (!checked('closing_waiting_action')) {
+      add('closing_waiting_action', 'Selecciona qué pasa con los tickets en espera.');
+    }
+    if (!checked('closing_active_action')) {
+      add('closing_active_action', 'Selecciona qué pasa con los tickets activos.');
+    }
+
+    if (!isConfirmed()) {
+      add('confirm_mapping', 'Confirma la matriz antes de generar el acta.');
+    }
+
+    return { errors, mapping };
+  }
+
+  function renderErrors(errors) {
+    $$('.field-error', form).forEach((element) => {
+      element.textContent = '';
+    });
+    $$('.is-invalid', form).forEach((element) => {
+      element.classList.remove('is-invalid');
+    });
+    $$('[aria-invalid="true"]', form).forEach((element) => {
+      element.setAttribute('aria-invalid', 'false');
+    });
+
+    const summary = $('#error-summary');
+    const list = $('#error-list');
+    list.replaceChildren();
+    summary.hidden = true;
+
+    if (!errors.length) {
+      return;
+    }
+
+    errors.forEach(({ field, message }) => {
+      const error = document.querySelector(`[data-error-for="${field}"]`);
+      if (error) {
+        error.textContent = message;
+      }
+
+      if (field.startsWith('mapping-')) {
+        const section = field.replace('mapping-', '');
+        $$(`[data-section="${section}"]`, form).forEach((element) => {
+          element.classList.add('is-invalid');
+          element.setAttribute('aria-invalid', 'true');
+        });
+      } else {
+        $$(`[name="${field}"]`, form).forEach((element) => {
+          element.classList.add('is-invalid');
+          element.setAttribute('aria-invalid', 'true');
+          const option = element.closest('.option');
+          if (option) {
+            option.classList.add('is-invalid');
+          }
+        });
+      }
+
+      const item = document.createElement('li');
+      item.textContent = message;
+      list.append(item);
+    });
+
+    summary.hidden = false;
+
+    const first = errors[0];
+    const target = first.field.startsWith('mapping-')
+      ? document.querySelector(`[data-section="${first.field.replace('mapping-', '')}"]`)
+      : document.querySelector(`[name="${first.field}"]`);
+    if (target) {
+      target.focus({ preventScroll: false });
+    }
+  }
+
+  function buildData(mapping) {
+    const numberingMode = checked('numbering_mode');
+    const serviceMode = checked('service_ticket_mode');
+    const operatorMode = checked('operator_sections_mode');
+
+    return {
+      schema_version: 1,
+      source: 'docs/formulario-decisiones.html',
+      generated_at: new Date().toISOString(),
+      meeting: {
+        date: val('meeting_date'),
+        facilitator: val('facilitator'),
+        participants: val('participants') || null
+      },
+      code_mapping: mapping,
+      numbering: {
+        mode: numberingMode,
+        reset_time: numberingMode === 'daily' || numberingMode === 'shift' ? val('numbering_time') : null,
+        timezone: val('numbering_timezone'),
+        shift_notes: numberingMode === 'shift' ? val('numbering_shift_notes') : null,
+        other: numberingMode === 'other' ? val('numbering_other') : null
+      },
+      service_tickets: {
+        mode: serviceMode,
+        notes: serviceMode === 'own_series' || serviceMode === 'other' ? val('service_ticket_notes') : null
+      },
+      no_show: {
+        max_calls: Number(val('no_show_calls')),
+        minutes_after_last_call: Number(val('no_show_minutes')),
+        action: checked('no_show_action'),
+        requeue_roles: checked('requeue_roles')
+      },
+      operator_sections: {
+        mode: operatorMode,
+        notes: operatorMode === 'other' ? val('operator_sections_other') : null
+      },
+      closing: {
+        opening_time: val('opening_time'),
+        closing_time: val('closing_time'),
+        waiting_action: checked('closing_waiting_action'),
+        active_action: checked('closing_active_action')
+      },
+      notes: val('notes') || null,
+      confirmed: true
+    };
+  }
+  function buildMarkdown(data) {
+    const lines = [];
+    const push = (...values) => lines.push(...values);
+
+    push('# Acta de decisiones bloqueantes — Sistema de tickets', '');
+    push(`**Fecha:** ${data.meeting.date}`);
+    push(`**Responsable:** ${data.meeting.facilitator}`);
+    if (data.meeting.participants) {
+      push(`**Participantes:** ${data.meeting.participants}`);
+    }
+
+    push('', '## 1. Matriz de códigos', '');
+    push('| Sección | General | Embarazo | Preferencial compartido |');
+    push('|---|---|---|---|');
+    SECTIONS.forEach((section) => {
+      const mapping = data.code_mapping[section.key];
+      push(`| ${section.name} | ${mapping.general} | ${mapping.pregnancy} | ${mapping.shared_preferential} |`);
+    });
+
+    push('', '## 2. Numeración', '');
+    push(`- **Modo:** ${labelFor('numbering_mode', data.numbering.mode)}`);
+    if (data.numbering.reset_time) {
+      push(`- **Hora:** ${data.numbering.reset_time}`);
+    }
+    push(`- **Zona horaria:** ${data.numbering.timezone}`);
+    if (data.numbering.shift_notes) {
+      push(`- **Turnos:** ${data.numbering.shift_notes}`);
+    }
+    if (data.numbering.other) {
+      push(`- **Regla:** ${data.numbering.other}`);
+    }
+
+    push('', '## 3. Servicios exclusivos', '');
+    push(`- **Numeración:** ${labelFor('service_ticket_mode', data.service_tickets.mode)}`);
+    if (data.service_tickets.notes) {
+      push(`- **Detalle:** ${data.service_tickets.notes}`);
+    }
+
+    push('', '## 4. Política de no presentado', '');
+    push(`- **Llamados antes de cerrar:** ${data.no_show.max_calls}`);
+    push(`- **Minutos tras el último llamado:** ${data.no_show.minutes_after_last_call}`);
+    push(`- **Acción:** ${labelFor('no_show_action', data.no_show.action)}`);
+    push(`- **Reencolado manual:** ${labelFor('requeue_roles', data.no_show.requeue_roles)}`);
+
+    push('', '## 5. Operadores y secciones', '');
+    push(`- **Regla:** ${labelFor('operator_sections_mode', data.operator_sections.mode)}`);
+    if (data.operator_sections.notes) {
+      push(`- **Detalle:** ${data.operator_sections.notes}`);
+    }
+
+    push('', '## 6. Cierre de jornada', '');
+    push(`- **Horario de operación:** ${data.closing.opening_time}–${data.closing.closing_time}`);
+    push(`- **Tickets en espera:** ${labelFor('closing_waiting_action', data.closing.waiting_action)}`);
+    push(`- **Tickets activos:** ${labelFor('closing_active_action', data.closing.active_action)}`);
+
+    if (data.notes) {
+      push('', '## 7. Notas y evidencia', '', data.notes);
+    }
+
+    push('', '## Confirmación', '');
+    push('La persona responsable confirma que esta matriz refleja el acuerdo vigente y que no se asignaron letras por suposición.');
+    push('', `_Generado desde ${data.source} el ${data.generated_at}._`);
+
+    return lines.join('\n');
+  }
+
+  function renderResult(data) {
+    $('#result').hidden = false;
+    $('#result-meta').textContent = `${data.meeting.date} · Responsable: ${data.meeting.facilitator}`;
+
+    const tbody = $('#result-mapping');
+    tbody.replaceChildren();
+    SECTIONS.forEach((section) => {
+      const mapping = data.code_mapping[section.key];
+      const row = document.createElement('tr');
+      [section.name, mapping.general, mapping.pregnancy, mapping.shared_preferential].forEach((value) => {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.append(cell);
+      });
+      tbody.append(row);
+    });
+
+    const answers = $('#result-answers');
+    answers.replaceChildren();
+    const addAnswer = (label, value) => {
+      const term = document.createElement('dt');
+      term.textContent = label;
+      const detail = document.createElement('dd');
+      detail.textContent = value;
+      answers.append(term, detail);
+    };
+
+    addAnswer(
+      'Numeración',
+      [
+        labelFor('numbering_mode', data.numbering.mode),
+        data.numbering.reset_time ? `hora ${data.numbering.reset_time}` : null,
+        data.numbering.timezone
+      ].filter(Boolean).join(' · ')
+    );
+    if (data.numbering.shift_notes) {
+      addAnswer('Turnos', data.numbering.shift_notes);
+    }
+    if (data.numbering.other) {
+      addAnswer('Regla de numeración', data.numbering.other);
+    }
+
+    addAnswer('Servicios exclusivos', labelFor('service_ticket_mode', data.service_tickets.mode));
+    if (data.service_tickets.notes) {
+      addAnswer('Detalle del servicio', data.service_tickets.notes);
+    }
+
+    addAnswer(
+      'No presentado',
+      `${data.no_show.max_calls} llamados · ${data.no_show.minutes_after_last_call} minutos · ${labelFor('no_show_action', data.no_show.action)}`
+    );
+    addAnswer('Reencolado manual', labelFor('requeue_roles', data.no_show.requeue_roles));
+
+    addAnswer('Operadores', labelFor('operator_sections_mode', data.operator_sections.mode));
+    if (data.operator_sections.notes) {
+      addAnswer('Detalle de operadores', data.operator_sections.notes);
+    }
+
+    addAnswer(
+      'Horario y cierre',
+      `${data.closing.opening_time}–${data.closing.closing_time} · espera: ${labelFor('closing_waiting_action', data.closing.waiting_action)} · activos: ${labelFor('closing_active_action', data.closing.active_action)}`
+    );
+    if (data.notes) {
+      addAnswer('Notas', data.notes);
+    }
+
+    currentJson = JSON.stringify(data, null, 2);
+    currentMarkdown = buildMarkdown(data);
+    $('#json-preview').textContent = currentJson;
+  }
+
+  function downloadFile(filename, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.append(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showToast('Resumen copiado.');
+    } catch (error) {
+      showToast('No se pudo copiar. Descarga el Markdown.');
+    }
+    textarea.remove();
+  }
+
+  function copyMarkdown() {
+    if (!currentMarkdown) {
+      return;
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(currentMarkdown)
+        .then(() => showToast('Resumen copiado.'))
+        .catch(() => fallbackCopy(currentMarkdown));
+      return;
+    }
+    fallbackCopy(currentMarkdown);
+  }
+
+  function clearForm() {
+    if (!window.confirm('¿Borrar todas las respuestas de este navegador?')) {
+      return;
+    }
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      // Sin almacenamiento disponible: se limpia solo el formulario.
+    }
+    form.reset();
+    currentJson = '';
+    currentMarkdown = '';
+    $('#result').hidden = true;
+    $('#json-preview').textContent = '';
+    $('#error-summary').hidden = true;
+    $('#error-list').replaceChildren();
+    $$('.field-error', form).forEach((element) => {
+      element.textContent = '';
+    });
+    $$('.is-invalid', form).forEach((element) => {
+      element.classList.remove('is-invalid');
+    });
+    setDefaultDate();
+    updateAll();
+    showToast('Respuestas borradas.');
+  }
+  function handleFormActivity(event) {
+    const target = event.target;
+    if (target.dataset && target.dataset.section) {
+      clearError(`mapping-${target.dataset.section}`);
+    } else if (target.name) {
+      clearError(target.name);
+    }
+    saveDraft();
+    updateAll();
+  }
+
+  form.addEventListener('input', handleFormActivity);
+  form.addEventListener('change', handleFormActivity);
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const { errors, mapping } = validate();
+    renderErrors(errors);
+
+    if (errors.length) {
+      $('#error-summary').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    renderResult(buildData(mapping));
+    saveDraft();
+    $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  $('#clear-btn').addEventListener('click', clearForm);
+
+  $('#download-json').addEventListener('click', () => {
+    if (!currentJson) {
+      return;
+    }
+    downloadFile(`decisiones-tickets-${val('meeting_date') || 'sin-fecha'}.json`, currentJson, 'application/json');
+  });
+
+  $('#download-md').addEventListener('click', () => {
+    if (!currentMarkdown) {
+      return;
+    }
+    downloadFile(`decisiones-tickets-${val('meeting_date') || 'sin-fecha'}.md`, currentMarkdown, 'text/markdown');
+  });
+
+  $('#copy-md').addEventListener('click', copyMarkdown);
+
+  $('#print-result').addEventListener('click', () => {
+    window.print();
+  });
+
+  restoreDraft();
+  setDefaultDate();
+  updateAll();
+})();
+</script>
+</body>
+</html>
