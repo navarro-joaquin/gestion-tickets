@@ -154,7 +154,7 @@ capturas, reportes y el registro de incidentes.
 | Caos: Reverb | | | |
 | Caos: cola | | | |
 | Caos: impresora | | | |
-| Respaldo | | | |
-| Restauración | | | |
+| Respaldo | 2026-11-06 | OK (local) | `scripts/backup.ps1` generó un volcado válido de 74 507 bytes con 36 tablas. El archivo temporal se eliminó. |
+| Restauración | 2026-11-06 | OK (local) | Restaurado en `gestion_tickets_restore`: 36/36 tablas y conteos idénticos (`tickets` 17, `users` 2, `audit_logs` 0, `ticket_events` 30, `migrations` 34). `migrate:status` y `tickets:health` en verde. Base temporal eliminada. |
 | UAT | | | |
 | Piloto live | | | |

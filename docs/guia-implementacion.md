@@ -953,7 +953,10 @@ La fase se ejecutó en tres entregas:
   de límites de tasa, cabeceras de seguridad e inyección de fórmulas en CSV.
 - [x] Respaldos: `scripts/backup.sh` y `scripts/backup.ps1`; el respaldo de
   Windows se probó localmente el 2026-11-06 con un volcado válido de 36 tablas.
-  **Pendiente:** ensayo formal de restauración en una base temporal.
+  Ensayo de restauración local completado el 2026-11-06 en
+  `gestion_tickets_restore`: 36/36 tablas, conteos idénticos, `migrate:status`
+  y `tickets:health` en verde. **Pendiente:** repetirlo en el entorno de
+  producción con el responsable de infraestructura.
 - [x] Runbook de operación en `docs/runbook-operacion.md`.
 - [x] Plan de UAT y piloto en `docs/piloto-uat.md`.
 - [x] Comando `php artisan tickets:health` para verificaciones previas al piloto.

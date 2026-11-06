@@ -262,6 +262,24 @@ Estos valores deben ser aprobados por la institución antes del piloto.
 4. Comparar conteos de `tickets`, `users` y `audit_logs` con producción.
 5. Registrar fecha, responsable y resultado en el registro del piloto.
 
+El usuario de la aplicación solo tiene permisos sobre `gestion_tickets` y
+`gestion_tickets_test` (mínimo privilegio). Para validar la base temporal con
+`migrate:status` o `tickets:health` hay que otorgarle permisos temporales y
+revocarlos al terminar:
+
+```sql
+GRANT ALL PRIVILEGES ON gestion_tickets_restore.* TO 'gestion_tickets'@'%';
+-- validar...
+REVOKE ALL PRIVILEGES ON gestion_tickets_restore.* FROM 'gestion_tickets'@'%';
+DROP DATABASE gestion_tickets_restore;
+FLUSH PRIVILEGES;
+```
+
+El ensayo local del 2026-11-06 confirmó el procedimiento: 36/36 tablas y conteos
+idénticos; `migrate:status` y `tickets:health` en verde. El ensayo formal en el
+entorno de producción sigue pendiente y debe hacerse sobre una base temporal,
+nunca sobre la base productiva.
+
 ## 5. Despliegue y reversión
 
 ### 5.1 Despliegue
