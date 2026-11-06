@@ -1,7 +1,7 @@
 # Guía de implementación — Gestión de Tickets
 
 **Proyecto:** `gestion-tickets`  
-**Estado:** Fases 1 y 2 completadas; núcleo de tickets operativo en entorno local.  
+**Estado:** Fases 1, 2 y 3 completadas; operación con ventanillas, sesiones y transferencias en entorno local.  
 **Última actualización:** 2026-11-06
 
 ---
@@ -10,7 +10,7 @@
 
 Documentar cómo está montado el proyecto, cómo levantarlo y en qué orden implementar el sistema de generación y gestión de tickets descrito en el diseño técnico. Es un documento vivo: debe actualizarse cuando se cierren decisiones pendientes o cambie la infraestructura.
 
-Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1) y el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2). Los módulos de operación avanzada, prioridades, administración, reportes y multimedia siguen pendientes (Fases 3 a 6).
+Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1), el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2) y la operación con ventanillas, sesiones de operador, transferencias entre secciones y pantalla de llamados (Fase 3). Las prioridades, la administración completa, los reportes y la multimedia siguen pendientes (Fases 4 a 6).
 
 ---
 
@@ -26,10 +26,10 @@ Esta guía describe el estado real del repositorio. A la fecha están implementa
 | Docker Compose | 5.5.1 |
 | Node.js / npm | 24.19.0 / 12.0.2 |
 | Laravel Boost | 2.10.4 (dev) |
-| Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk`, `console` y `admin` |
+| Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk`, `console`, `display` y `admin` |
 | Redis / Reverb / Echo | Reverb instalado (`dev-main`) y Echo/Pusher JS en el frontend; Redis no habilitado todavía |
-| Módulos de dominio | Fases 1 y 2: matriz de códigos y núcleo de tickets; ajuste de hora de cierre en administración |
-| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events`, `settings` |
+| Módulos de dominio | Fases 1, 2 y 3: matriz de códigos, núcleo de tickets, ajuste de hora de cierre, ventanillas, sesiones, transferencias e impresión operativa |
+| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events`, `settings`, `stations`, `operator_sessions`, `station_assignments`, `ticket_transfers`, `tickets.current_section_id` y clave única de ventanilla activa por sección |
 
 ### Archivos relevantes creados
 
@@ -42,30 +42,32 @@ gestion-tickets/
 │   ├── Domain/
 │   │   ├── Sections/             # Fase 1: secciones, categorías, matriz y gate
 │   │   ├── Settings/             # Hora de cierre configurable
+│   │   ├── Operations/           # Fase 3: ventanillas, sesiones y transferencias
 │   │   └── Ticketing/            # Fase 2: modelos, acciones y formateador ESC/POS
 │   ├── Console/Commands/         # tickets:no-show, tickets:day:close
 │   ├── Events/TicketQueueChanged.php
 │   └── Http/
-│       ├── Controllers/Api/V1/   # Section, Ticket, Console, Display, AdminSettings
+│       ├── Controllers/Api/V1/   # Section, Ticket, Console, OperatorSession, Display, AdminSettings
 │       ├── Requests/Api/V1/
-│       └── Resources/TicketResource.php
+│       └── Resources/            # Ticket, TicketTransfer, Operator, OperatorSession y Station
 ├── database/
-│   ├── migrations/               # Fase 1 + Fase 2 + settings
-│   ├── factories/Domain/Ticketing/
-│   └── seeders/                  # CategorySeeder, SectionSeeder
+│   ├── migrations/               # Fases 1 a 3 + settings
+│   ├── factories/Domain/         # Ticketing y Operations
+│   └── seeders/                  # Category, Section, Station y DemoOperator (solo local)
 ├── resources/
 │   ├── js/
 │   │   ├── apps/kiosk/           # Quiosco Vue 3
-│   │   ├── apps/console/         # Consola Vue 3
+│   │   ├── apps/console/         # Consola Vue 3 con sesiones y transferencias
+│   │   ├── apps/display/         # Pantalla de llamados
 │   │   ├── apps/admin/           # Administración: hora de cierre
 │   │   └── shared/               # API, tipos, Echo e impresión
-│   └── views/                    # kiosk, console y admin (Blade)
+│   └── views/                    # kiosk, console, display y admin (Blade)
 ├── routes/
 │   ├── api.php                   # API v1
 │   ├── channels.php              # Canal sections.{slug}
 │   └── console.php               # Scheduler
 ├── tests/
-│   ├── Feature/                  # T-MAP, T-SEQ, API
+│   ├── Feature/                  # T-MAP, T-SEQ, T-OPS, API
 │   └── Unit/Ticketing/           # Máquina de estados
 └── docs/
     ├── guia-implementacion.md              # Este documento
@@ -435,6 +437,7 @@ Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06) y las tablas 
 |---|---|---|
 | `id` | bigint unsigned | PK |
 | `section_id` | FK `sections` | sección de origen/propietaria |
+| `current_section_id` | FK `sections` nullable | sección que atiende el ticket; cambia con las transferencias |
 | `section_ticket_code_id` | FK `section_ticket_codes` | código que resolvió la matriz |
 | `category_id` | FK `categories` | categoría declarada |
 | `code` | char(1) | copia del código para reportes |
@@ -449,12 +452,14 @@ Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06) y las tablas 
 | `started_at` / `finished_at` / `closed_at` | timestamp nullable | hitos de atención y cierre |
 | `timestamps` | — | — |
 
-Único `(section_id, code, period_key, number)`. Índices `(section_id, status, issued_at)` para la cola y `(section_id, category_id, issued_at)` para reportes.
+Único `(section_id, code, period_key, number)`. Índices `(section_id, status, issued_at)` para la cola, `(current_section_id, status, issued_at)` para la cola de la sección que atiende y `(section_id, category_id, issued_at)` para reportes.
 
 Dos columnas generadas almacenadas impiden la doble atención:
 
-- `active_station_key` = `station_label` cuando el estado es `called` o `in_service`, con índice único.
+- `active_station_key` = `concat(current_section_id, ':', station_label)` cuando el estado es `called` o `in_service`, con índice único. La clave incluye la sección actual para que varias secciones puedan usar “Ventanilla 1” a la vez. Referencia `current_section_id` y no `section_id` porque MySQL no permite `ON DELETE CASCADE` sobre una columna base de una columna generada almacenada.
 - `active_operator_key` = `operator_id` en los mismos estados, con índice único.
+
+`section_id` es la sección de origen y no cambia; `current_section_id` determina la cola, el snapshot y el llamado actual. La unicidad de la numeración sigue anclada a `(section_id, code, period_key)`.
 
 ### 9.8 `ticket_assignments`
 
@@ -477,7 +482,7 @@ Dos columnas generadas almacenadas impiden la doble atención:
 |---|---|---|
 | `id` | bigint unsigned | PK |
 | `ticket_id` | FK `tickets` | `cascadeOnDelete` |
-| `type` | varchar(40) | `issued`, `called`, `recalled`, `started`, `finished`, `no_show`, `cancelled`, `expired` |
+| `type` | varchar(40) | `issued`, `called`, `recalled`, `started`, `finished`, `no_show`, `cancelled`, `expired`, `transferred`, `reprinted`, `print_failed` |
 | `actor_id` | FK `users` nullable | operador que ejecutó la acción |
 | `payload` | json nullable | datos del evento |
 | `occurred_at` | timestamp | momento del evento |
@@ -485,14 +490,14 @@ Dos columnas generadas almacenadas impiden la doble atención:
 
 Índices `(ticket_id, occurred_at)` y `type`. Es un registro append-only: la aplicación no lo actualiza ni lo borra.
 
-Detalles críticos ya implementados en la Fase 2:
+Detalles críticos implementados en las Fases 2 y 3:
 
 - `ticket_sequences` con único `(section_id, code, period_key)`.
 - `tickets` con único `(section_id, code, period_key, number)`.
 - Índice `(section_id, status, issued_at)` para la cola.
 - Columnas generadas únicas para impedir doble ticket activo por operador y por ventanilla.
 - `ticket_events` append-only; `audit_logs` queda para la Fase 5.
-- `section_id` representa la sección de origen; `current_section_id` y la transferencia llegan en la Fase 3.
+- `section_id` representa la sección de origen; `current_section_id` y la tabla `ticket_transfers` se incorporaron en la Fase 3.
 
 ### 9.10 `settings`
 
@@ -504,6 +509,61 @@ Detalles críticos ya implementados en la Fase 2:
 | `timestamps` | — | — |
 
 Almacén clave-valor para configuración global. La hora de cierre se guarda como `HH:MM` en `tickets.day_closing_time`; si no existe o es inválida, el sistema usa `16:30`. La zona horaria es la de la aplicación (`America/La_Paz`).
+
+### 9.11 `stations`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `section_id` | FK `sections` | `cascadeOnDelete` |
+| `name` | varchar(50) | etiqueta visible, por ejemplo “Ventanilla 1” |
+| `is_active` | boolean | por defecto `true`; se desactiva, no se elimina si tiene historial |
+| `sort_order` | unsigned smallint | orden de presentación |
+| `timestamps` | — | — |
+
+Único `(section_id, name)`; índice `(section_id, is_active, sort_order)`. Cada sección tiene sus propias ventanillas, de modo que “Ventanilla 1” puede existir en Plataforma, ODECO y Cajas.
+
+### 9.12 `operator_sessions`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `operator_id` | FK `users` | operador o supervisor |
+| `section_id` | FK `sections` | sección de la jornada; `cascadeOnDelete` |
+| `started_at` | timestamp | apertura |
+| `ended_at` | timestamp nullable | cierre; `null` indica sesión activa |
+| `timestamps` | — | — |
+
+Índices `(operator_id, started_at)` y `(section_id, ended_at)`. La columna generada `active_operator_key` = `operator_id` cuando `ended_at` es `null`, con índice único: un operador no puede tener dos sesiones abiertas. Una sesión fija la sección de la jornada; el cambio de ventanilla se registra en `station_assignments`.
+
+### 9.13 `station_assignments`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `operator_session_id` | FK `operator_sessions` | `cascadeOnDelete` |
+| `station_id` | FK `stations` | sin borrado en cascada por la columna generada |
+| `assigned_at` | timestamp | inicio de la asignación |
+| `released_at` | timestamp nullable | fin de la asignación |
+| `timestamps` | — | — |
+
+Índices `(operator_session_id, assigned_at)` y `(station_id, released_at)`. La columna generada `active_station_key` = `station_id` cuando `released_at` es `null`, con índice único: una ventanilla no puede estar asignada a dos sesiones abiertas. Cada cambio de ventanilla cierra la asignación anterior y crea una nueva, conservando el historial.
+
+### 9.14 `ticket_transfers`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `ticket_id` | FK `tickets` | `cascadeOnDelete` |
+| `from_section_id` | FK `sections` | sección que remite |
+| `to_section_id` | FK `sections` | sección de destino |
+| `from_operator_id` | FK `users` nullable | operador que remite |
+| `to_operator_id` | FK `users` nullable | operador de destino, si se conoce |
+| `reason` | varchar(255) nullable | motivo |
+| `transferred_at` | timestamp | momento de la transferencia |
+| `timestamps` | — | — |
+
+Índices `(ticket_id, transferred_at)` y `(to_section_id, transferred_at)`. Es un historial append-only de transferencias; cada transferencia también genera un evento `transferred` en `ticket_events`. La transferencia conserva `code` y `number`, actualiza `current_section_id` y deja `section_id` intacto.
 
 ---
 
@@ -651,20 +711,58 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - El servicio local de impresión (`http://127.0.0.1:9100/print`) no está implementado; el driver existe pero requiere ese servicio externo. QZ Tray se carga dinámicamente.
 - `BROADCAST_CONNECTION=log` por defecto y `null` en pruebas; para tiempo real hay que ejecutar `php artisan reverb:start` y cambiar la conexión a `reverb`.
 - El quiosco muestra todas las secciones activas; la asignación por dispositivo es Fase 5 (Q-12).
-- La transferencia entre secciones y el `current_section_id` son Fase 3 (Q-11).
+- La transferencia entre secciones y el `current_section_id` estaban fuera de la Fase 2; se implementaron en la Fase 3 (Q-11).
 - La proporción 2:1, el aging y los servicios exclusivos son Fase 4.
 - `laravel/reverb` se instaló como `dev-main` porque las versiones `v1.x` exigen `guzzlehttp/psr7 ^2.6` y el proyecto usa `^3.2`; `dev-main` acepta `^2.6|^3.0`. Debe reemplazarse por un release etiquetado cuando esté disponible.
 
-### Fase 3 — Operación
+### Fase 3 — Operación (completada el 2026-11-06)
 
-- [ ] Ventanillas.
-- [ ] Sesiones de operador.
-- [ ] Cambio de ventanilla con historial.
-- [ ] Transferencia de tickets entre secciones con historial.
-- [ ] Pantallas de llamados.
-- [ ] Reimpresión y manejo de fallos de impresora.
+- [x] Ventanillas.
+- [x] Sesiones de operador.
+- [x] Cambio de ventanilla con historial.
+- [x] Transferencia de tickets entre secciones con historial.
+- [x] Pantallas de llamados.
+- [x] Reimpresión y manejo de fallos de impresora.
 
 **Salida:** historial completo de asignaciones y pantalla actualizada por WebSocket.
+
+**Entregables de Fase 3:**
+
+- Migraciones `stations`, `operator_sessions`, `station_assignments`, `ticket_transfers`, `tickets.current_section_id` y ampliación de la clave única de ventanilla activa a `(current_section_id, station_label)`.
+- Modelos `Station`, `OperatorSession`, `StationAssignment` y `TicketTransfer`, con factories y relaciones en `Section`, `User` y `Ticket`.
+- Acciones en `app/Domain/Operations/Actions/`:
+  - `OpenOperatorSession`: valida operador activo, rol, sección operativa y ventanilla libre; abre una sola sesión por operador.
+  - `CloseOperatorSession`: rechaza el cierre si el operador tiene un ticket activo; libera asignaciones.
+  - `ChangeOperatorStation`: valida que la ventanilla pertenezca a la sección y esté libre; conserva historial.
+  - `TransferTicket`: solo para tickets `waiting` o `called`; conserva `code` y `number`, actualiza `current_section_id`, registra `ticket_transfers` y un evento `transferred`. Un ticket `called` vuelve a `waiting`, libera la asignación y reinicia `call_count`.
+  - `ReprintTicket` y `RegisterPrintFailure`: registran eventos `reprinted` y `print_failed` sin cambiar el estado del ticket.
+- `CallNextTicket` usa `current_section_id`, exige que la sección y la ventanilla coincidan con la sesión activa del operador y permite el mismo nombre de ventanilla en secciones distintas.
+- `CloseTicketDay` cierra también las sesiones y asignaciones activas al final de la jornada.
+- API v1:
+  - `GET /api/v1/console/operators` → operadores y supervisores activos.
+  - `GET /api/v1/console/stations?section=` → ventanillas activas de la sección.
+  - `POST /api/v1/console/session` → apertura de sesión con `operator_id`, `section` y `station_id`.
+  - `GET /api/v1/console/session/{session}` → detalle e historial.
+  - `DELETE /api/v1/console/session/{session}` → cierre de sesión.
+  - `PATCH /api/v1/console/session/{session}/station` → cambio de ventanilla.
+  - `POST /api/v1/console/tickets/{ticket}/transfer` → transferencia con `section`, operadores y motivo.
+  - `POST /api/v1/console/tickets/{ticket}/reprint` → reimpresión con payload ESC/POS.
+  - `POST /api/v1/console/tickets/{ticket}/print-failed` → registro del fallo de impresión.
+  - `GET /api/v1/console/queue` incluye `session` y `stations`; `GET /api/v1/display/snapshot` agrupa por `current_section_id`.
+- Frontend:
+  - Consola con apertura/cierre de sesión, selección de operador, sección y ventanilla, cambio de ventanilla, transferencia, reimpresión y selección de driver.
+  - App `display` en `/pantalla` con snapshot, reloj, llamados por sección, llamados anteriores y suscripción a Echo.
+  - `TicketResource` expone `current_section`, `is_transferred` y el historial `transfers`.
+- Seeders `StationSeeder` (3 ventanillas por sección) y `DemoOperatorSeeder` (solo `APP_ENV=local`, usuario `operador@demo.local` / `password`).
+- Pruebas: **96 pruebas, 352 aserciones en verde**, incluidas T-OPS de sesiones, ventanillas, transferencias y API.
+
+**Limitaciones conocidas de la Fase 3:**
+
+- Sigue sin autenticación ni autorización: la consola, las sesiones y la administración deben usarse solo en local hasta la Fase 4. Cualquier persona con acceso HTTP puede abrir una sesión indicando `operator_id`.
+- La pantalla `/pantalla` no reproduce audio ni anuncia por voz; el ring + TTS es Fase 5 (Q-10).
+- El servicio local de impresión sigue sin implementarse; los drivers `local` y `qz` ya existen y la reimpresión registra fallos, pero no hay reintentos ni fallback automático.
+- La transferencia no recalcula prioridad ni autoriza por rol; esas reglas llegan con la Fase 4.
+- Reverb sigue siendo `dev-main` y `BROADCAST_CONNECTION=log` por defecto; sin Reverb la pantalla y la consola usan polling cada 5 segundos.
 
 ### Fase 4 — Prioridades y servicios
 
@@ -747,12 +845,13 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 2: **71 pruebas, 226 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 3: **96 pruebas, 352 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
+- T-OPS: sesiones de operador, ventanillas, cambio de ventanilla, transferencias, reimpresión, fallos de impresión, cierre de sesiones y aislamiento de ventanillas por sección.
 - T-CONC: 6 procesos en paralelo emiten 5 tickets cada uno; se verifican 30 números únicos y consecutivos contra MySQL real.
-- Flujo API completo: emisión → llamado → rellamado → inicio → finalización, más snapshot de pantalla.
+- Flujo API completo: emisión → llamado → rellamado → inicio → finalización, más snapshot de pantalla y transferencia.
 - Ajustes: hora de cierre por defecto, cambio persistente, validación, comparación horaria y API de administración.
 
 La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportamiento de `lockForUpdate` ni de las columnas generadas.
@@ -765,7 +864,10 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 - Healthcheck del contenedor MySQL ya configurado en `compose.yaml`.
 - Scheduler: `tickets:no-show` cada minuto y `tickets:day:close` cada minuto, con ejecución efectiva cuando la hora local alcanza la hora configurada en `/admin/ajustes` (por defecto `16:30`). En local se ejecuta con `php artisan schedule:work`; en producción, con el cron de Laravel.
 - Cierre manual: `php artisan tickets:day:close --force`.
-- Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola sigue funcionando por polling cada 5 segundos.
+- Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola y la pantalla siguen funcionando por polling cada 5 segundos.
+- Operación local: ejecutar `php artisan db:seed` para crear ventanillas y el usuario de demostración `operador@demo.local` / `password` (solo con `APP_ENV=local`). En producción no se crea ese usuario.
+- La consola abre una sesión por operador y exige una ventanilla; el cambio de ventanilla queda en `station_assignments`.
+- La pantalla `/pantalla` se suscribe a todas las secciones activas y muestra el último llamado y los anteriores.
 - Redis: instalado en la arquitectura objetivo pero no habilitado; caché, colas y sesiones usan base de datos en local.
 - Pendiente: healthchecks de aplicación y Reverb, Horizon, respaldos automatizados y purga a 12 meses.
 - Respaldos locales con `mysqldump`; en producción, binlog + copia externa cifrada.
@@ -834,10 +936,22 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 
 | Tema | Detalle | Fase aproximada |
 |---|---|---|
-| Transferencia (Q-11) | ¿Quién autoriza: operador origen, operador destino o supervisor? ¿Se recalcula la prioridad con el perfil de la sección destino o se conserva la original? ¿El reporte se atribuye a la sección de origen o a la de destino? | Fase 3 (operador) |
+| Transferencia (Q-11) | Resuelto en lo operativo en la Fase 3: la transfiere el operador que atiende, con motivo y operador de destino opcionales, y se conserva la prioridad original. Queda pendiente para la Fase 4 la autorización por rol y el recálculo de prioridad con el perfil de la sección destino. | Fase 4 (prioridades) |
 | Retención (Q-09) | ¿La auditoría append-only se conserva también 12 meses o tiene un plazo distinto? | Fase 5 (administración) |
 | Voz (Q-10) | Idioma, tipo de voz, volumen y si se usa TTS del sistema o un servicio externo. | Fase 5 (multimedia) |
-| Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados en la Fase 2; quedan reintentos/fallback y la autenticación del servicio local. | Fase 3 |
+| Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados; la Fase 3 añadió reimpresión y registro de fallos, pero quedan reintentos/fallback y la autenticación del servicio local. | Fase 4/5 |
+
+### 15.5 Operación de la Fase 3 (2026-11-06)
+
+Decisiones adoptadas al implementar la operación, coherentes con el acta:
+
+- **Ventanillas:** cada sección tiene sus propias ventanillas. Una ventanilla activa pertenece a una sola sesión; la clave única es `(current_section_id, station_label)`, por lo que “Ventanilla 1” puede usarse simultáneamente en secciones distintas.
+- **Sesiones:** un operador tiene una sola sesión activa y una sola sección por jornada. La sesión se cierra al final de la jornada o manualmente; no se puede cerrar con un ticket activo.
+- **Cambio de ventanilla:** se permite dentro de la misma sección, sin ticket activo, dejando historial en `station_assignments`.
+- **Transferencia:** la ejecuta el operador que atiende. Se permite desde `waiting` o `called`; un ticket `called` vuelve a `waiting`, se libera la asignación y `call_count` se reinicia a 0. Un ticket `in_service` no se transfiere. Se conservan código y número originales y se registra origen, destino, operadores, motivo y fecha.
+- **Cierre de jornada:** además de resolver los tickets, cierra las sesiones y asignaciones activas.
+- **Reimpresión y fallos:** se registran como eventos `reprinted` y `print_failed`; no cambian el estado del ticket. El reintento queda a cargo del operador.
+- **Alcance sin autenticación:** la Fase 3 no añade login ni autorización. La consola y la administración siguen siendo de uso local hasta la Fase 4.
 
 ---
 
@@ -850,7 +964,8 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 5. ~~Escribir las pruebas T-MAP antes de habilitar cualquier sección.~~ Completado: 19 pruebas en verde.
 6. ~~Configurar la base de datos de pruebas en MySQL.~~ Completado: `gestion_tickets_test`.
 7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 71 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/admin/ajustes` y API.
-8. Comenzar la Fase 3: ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados.
+8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado, transferencia, reimpresión y fallo de impresión.
+9. Comenzar la Fase 4: prioridades configurable 2:1, aging, servicios exclusivos y autorización por servicio.
 
 ---
 
@@ -871,4 +986,4 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 y 2 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La pantalla de administración todavía no tiene autenticación; debe usarse solo en local hasta la Fase 4. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1, 2 y 3 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La consola y la administración todavía no tienen autenticación; deben usarse solo en local hasta la Fase 4. Cualquier avance debe reflejarse aquí y en el acta de decisiones.

@@ -20,16 +20,16 @@ class DisplayController extends Controller
 
         $activeTickets = Ticket::query()
             ->active()
-            ->with(['section', 'category'])
+            ->with(['section', 'currentSection', 'category'])
             ->orderBy('called_at')
             ->get()
-            ->groupBy('section_id');
+            ->groupBy('current_section_id');
 
         $waitingCounts = Ticket::query()
             ->waiting()
-            ->selectRaw('section_id, count(*) as total')
-            ->groupBy('section_id')
-            ->pluck('total', 'section_id');
+            ->selectRaw('current_section_id, count(*) as total')
+            ->groupBy('current_section_id')
+            ->pluck('total', 'current_section_id');
 
         return response()->json([
             'data' => $sections->map(fn (Section $section): array => [

@@ -18,6 +18,42 @@ export interface Section {
     codes: TicketCode[];
 }
 
+export interface Station {
+    id: number;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+}
+
+export interface Operator {
+    id: number;
+    name: string;
+    role: string;
+    role_label: string;
+}
+
+export interface TransferHistory {
+    id: number;
+    from_section?: {
+        slug: string;
+        name: string;
+    };
+    to_section?: {
+        slug: string;
+        name: string;
+    };
+    from_operator?: {
+        id: number;
+        name: string;
+    } | null;
+    to_operator?: {
+        id: number;
+        name: string;
+    } | null;
+    reason: string | null;
+    transferred_at: string;
+}
+
 export interface Ticket {
     id: number;
     code: string;
@@ -26,6 +62,7 @@ export interface Ticket {
     label: string;
     status: string;
     status_label: string;
+    is_transferred: boolean;
     station_label: string | null;
     call_count: number;
     issued_at: string;
@@ -37,15 +74,46 @@ export interface Ticket {
         slug: string;
         name: string;
     };
+    current_section?: {
+        slug: string;
+        name: string;
+    } | null;
+    transfers?: TransferHistory[];
     category?: Category;
 }
 
 export interface IssuedTicketResponse {
     data: Ticket;
-    print: {
-        escpos_base64: string;
-        text: string;
+    print: PrintPayload;
+}
+
+export interface PrintPayload {
+    escpos_base64: string;
+    text: string;
+}
+
+export interface OperatorSession {
+    id: number;
+    operator?: {
+        id: number;
+        name: string;
     };
+    section?: {
+        slug: string;
+        name: string;
+    };
+    station: {
+        id: number;
+        name: string;
+    } | null;
+    started_at: string;
+    ended_at: string | null;
+    is_active: boolean;
+    history?: Array<{
+        station: string;
+        assigned_at: string;
+        released_at: string | null;
+    }>;
 }
 
 export interface ConsoleQueue {
@@ -55,6 +123,8 @@ export interface ConsoleQueue {
     };
     waiting_count: number;
     active_ticket: Ticket | null;
+    session: OperatorSession | null;
+    stations: Station[];
 }
 
 export interface DisplaySnapshot {

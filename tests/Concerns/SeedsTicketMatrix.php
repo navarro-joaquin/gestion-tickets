@@ -6,12 +6,13 @@ use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\SectionSeeder;
+use Database\Seeders\StationSeeder;
 
 trait SeedsTicketMatrix
 {
     protected function seedMatrix(): void
     {
-        $this->seed([CategorySeeder::class, SectionSeeder::class]);
+        $this->seed([CategorySeeder::class, SectionSeeder::class, StationSeeder::class]);
     }
 
     protected function section(string $slug): Section

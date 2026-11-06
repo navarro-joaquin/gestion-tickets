@@ -11,6 +11,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CategorySeeder::class,
             SectionSeeder::class,
+            StationSeeder::class,
         ]);
+
+        if (app()->environment('local')) {
+            $this->call(DemoOperatorSeeder::class);
+        }
     }
 }

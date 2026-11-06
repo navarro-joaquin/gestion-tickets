@@ -2,15 +2,36 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../../shared/api/client';
 import { getEcho } from '../../shared/echo';
-import type { ConsoleQueue, Section, Ticket } from '../../shared/types/api';
+import { createPrintDriver, type PrintDriverKind } from '../../shared/printing/escpos';
+import type {
+    ConsoleQueue,
+    Operator,
+    OperatorSession,
+    Section,
+    Station,
+    Ticket,
+} from '../../shared/types/api';
+
+const SESSION_STORAGE_KEY = 'console-session-id';
 
 const sections = ref<Section[]>([]);
-const sectionSlug = ref('');
-const station = ref('Ventanilla 1');
+const operators = ref<Operator[]>([]);
+const stations = ref<Station[]>([]);
+const session = ref<OperatorSession | null>(null);
 const queue = ref<ConsoleQueue | null>(null);
+
+const selectedSectionSlug = ref('');
+const selectedOperatorId = ref<number | null>(null);
+const selectedStationId = ref<number | null>(null);
+const changeStationId = ref<number | null>(null);
+const transferSectionSlug = ref('');
+const transferReason = ref('');
+
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
+const printState = ref<'idle' | 'printing' | 'printed' | 'failed'>('idle');
+const driverKind = ref<PrintDriverKind>('local');
 
 const echoClient = getEcho();
 let channelName: string | null = null;
@@ -18,6 +39,8 @@ let pollingTimer: ReturnType<typeof setInterval> | undefined;
 
 const activeTicket = computed<Ticket | null>(() => queue.value?.active_ticket ?? null);
 const waitingCount = computed<number>(() => queue.value?.waiting_count ?? 0);
+const currentStationName = computed<string>(() => session.value?.station?.name ?? '');
+const sessionStations = computed<Station[]>(() => queue.value?.stations ?? stations.value);
 
 const canRecall = computed<boolean>(
     () => activeTicket.value?.status === 'called' && activeTicket.value.call_count < 2,
@@ -25,15 +48,31 @@ const canRecall = computed<boolean>(
 const canStart = computed<boolean>(() => activeTicket.value?.status === 'called');
 const canFinish = computed<boolean>(() => activeTicket.value?.status === 'in_service');
 const canCallNext = computed<boolean>(() => activeTicket.value === null);
+const canTransfer = computed<boolean>(
+    () => activeTicket.value !== null && ['waiting', 'called'].includes(activeTicket.value.status),
+);
+
+const transferSections = computed<Section[]>(() => {
+    const currentSlug = session.value?.section?.slug;
+
+    return sections.value.filter((section) => section.slug !== currentSlug);
+});
 
 onMounted(async () => {
-    const storedStation = localStorage.getItem('console-station');
+    const storedDriver = localStorage.getItem('print-driver');
 
-    if (storedStation) {
-        station.value = storedStation;
+    if (storedDriver === 'local' || storedDriver === 'qz') {
+        driverKind.value = storedDriver;
     }
 
-    await loadSections();
+    await Promise.all([loadSections(), loadOperators()]);
+
+    if (sections.value.length > 0) {
+        selectedSectionSlug.value = sections.value[0].slug;
+    }
+
+    await loadStations();
+    await restoreSession();
 
     pollingTimer = setInterval(() => {
         void loadQueue();
@@ -45,42 +84,192 @@ onBeforeUnmount(() => {
         clearInterval(pollingTimer);
     }
 
-    if (echoClient && channelName) {
-        echoClient.leave(channelName);
+    unsubscribe();
+});
+
+watch(selectedSectionSlug, async () => {
+    if (session.value) {
+        return;
+    }
+
+    selectedStationId.value = null;
+    await loadStations();
+
+    if (stations.value.length > 0) {
+        selectedStationId.value = stations.value[0].id;
     }
 });
 
-watch(sectionSlug, () => {
-    subscribe();
-    void loadQueue();
-});
-
-watch(station, () => {
-    localStorage.setItem('console-station', station.value);
-    void loadQueue();
+watch(selectedStationId, (stationId) => {
+    if (session.value) {
+        changeStationId.value = stationId;
+    }
 });
 
 async function loadSections(): Promise<void> {
     try {
         const response = await api.sections();
         sections.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
 
-        if (sections.value.length > 0) {
-            sectionSlug.value = sections.value[0].slug;
+async function loadOperators(): Promise<void> {
+    try {
+        const response = await api.operators();
+        operators.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function loadStations(): Promise<void> {
+    if (!selectedSectionSlug.value) {
+        stations.value = [];
+        return;
+    }
+
+    try {
+        const response = await api.stations(selectedSectionSlug.value);
+        stations.value = response.data;
+
+        if (stations.value.length > 0 && !stations.value.some((station) => station.id === selectedStationId.value)) {
+            selectedStationId.value = stations.value[0].id;
         }
     } catch (exception) {
         error.value = describeError(exception);
     }
 }
 
-async function loadQueue(): Promise<void> {
-    if (!sectionSlug.value) {
+async function restoreSession(): Promise<void> {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+
+    if (!stored) {
         return;
     }
 
     try {
-        const response = await api.queue(sectionSlug.value, station.value);
+        const response = await api.session(Number(stored));
+
+        if (!response.data.is_active) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            return;
+        }
+
+        await useSession(response.data);
+    } catch {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+}
+
+async function openSession(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    if (!selectedOperatorId.value || !selectedSectionSlug.value || !selectedStationId.value) {
+        error.value = 'Seleccione operador, sección y ventanilla para abrir la jornada.';
+        return;
+    }
+
+    busy.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const response = await api.openSession(
+            selectedOperatorId.value,
+            selectedSectionSlug.value,
+            selectedStationId.value,
+        );
+
+        await useSession(response.data);
+        message.value = response.message;
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function useSession(activeSession: OperatorSession): Promise<void> {
+    session.value = activeSession;
+    selectedOperatorId.value = activeSession.operator?.id ?? null;
+    selectedSectionSlug.value = activeSession.section?.slug ?? '';
+    selectedStationId.value = activeSession.station?.id ?? null;
+    changeStationId.value = activeSession.station?.id ?? null;
+    localStorage.setItem(SESSION_STORAGE_KEY, String(activeSession.id));
+
+    if (activeSession.section?.slug) {
+        const sectionStations = await api.stations(activeSession.section.slug);
+        stations.value = sectionStations.data;
+    }
+
+    await loadQueue();
+    subscribe();
+}
+
+async function closeSession(): Promise<void> {
+    if (!session.value || busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const response = await api.closeSession(session.value.id);
+        message.value = response.message;
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        unsubscribe();
+        session.value = null;
+        queue.value = null;
+        printState.value = 'idle';
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function changeStation(): Promise<void> {
+    if (!session.value || !changeStationId.value || busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const response = await api.changeStation(session.value.id, changeStationId.value);
+        session.value = response.data;
+        selectedStationId.value = response.data.station?.id ?? null;
+        message.value = response.message;
+        await loadQueue();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function loadQueue(): Promise<void> {
+    if (!session.value?.section?.slug || !currentStationName.value) {
+        return;
+    }
+
+    try {
+        const response = await api.queue(
+            session.value.section.slug,
+            currentStationName.value,
+            session.value.operator?.id ?? null,
+        );
+
         queue.value = response.data;
+        session.value = response.data.session ?? session.value;
         error.value = '';
     } catch (exception) {
         error.value = describeError(exception);
@@ -88,35 +277,42 @@ async function loadQueue(): Promise<void> {
 }
 
 function subscribe(): void {
-    if (!echoClient) {
+    if (!echoClient || !session.value?.section?.slug) {
         return;
     }
 
-    if (channelName) {
-        echoClient.leave(channelName);
-        channelName = null;
-    }
-
-    if (!sectionSlug.value) {
-        return;
-    }
-
-    channelName = `sections.${sectionSlug.value}`;
+    unsubscribe();
+    channelName = `sections.${session.value.section.slug}`;
 
     echoClient.channel(channelName).listen('.queue.changed', () => {
         void loadQueue();
     });
 }
 
+function unsubscribe(): void {
+    if (echoClient && channelName) {
+        echoClient.leave(channelName);
+    }
+
+    channelName = null;
+}
+
 async function callNext(): Promise<void> {
-    if (busy.value || !sectionSlug.value) {
+    if (busy.value || !session.value?.section?.slug || !currentStationName.value) {
         return;
     }
 
     busy.value = true;
+    message.value = '';
+    error.value = '';
 
     try {
-        const response = await api.next(sectionSlug.value, station.value);
+        const response = await api.next(
+            session.value.section.slug,
+            currentStationName.value,
+            session.value.operator?.id ?? null,
+        );
+
         message.value = response.message;
         await loadQueue();
     } catch (exception) {
@@ -132,6 +328,8 @@ async function runAction(action: 'recall' | 'start' | 'finish'): Promise<void> {
     }
 
     busy.value = true;
+    message.value = '';
+    error.value = '';
 
     try {
         const response = await api[action](activeTicket.value.id);
@@ -142,6 +340,70 @@ async function runAction(action: 'recall' | 'start' | 'finish'): Promise<void> {
     } finally {
         busy.value = false;
     }
+}
+
+async function reprint(): Promise<void> {
+    if (busy.value || !activeTicket.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+    printState.value = 'printing';
+
+    try {
+        const response = await api.reprint(activeTicket.value.id);
+
+        try {
+            await createPrintDriver(driverKind.value).print(response.print.escpos_base64);
+            printState.value = 'printed';
+            message.value = response.message;
+        } catch (printException) {
+            printState.value = 'failed';
+            const detail = describeError(printException);
+            error.value = `No se pudo imprimir: ${detail}`;
+            await api.printFailed(activeTicket.value.id, detail, session.value?.operator?.id ?? null);
+        }
+    } catch (exception) {
+        printState.value = 'idle';
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function transfer(): Promise<void> {
+    if (!activeTicket.value || !transferSectionSlug.value || busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    try {
+        const response = await api.transfer(
+            activeTicket.value.id,
+            transferSectionSlug.value,
+            session.value?.operator?.id ?? null,
+            null,
+            transferReason.value,
+        );
+
+        message.value = response.message;
+        transferSectionSlug.value = '';
+        transferReason.value = '';
+        await loadQueue();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+function changeDriver(): void {
+    localStorage.setItem('print-driver', driverKind.value);
 }
 
 function describeError(exception: unknown): string {
@@ -157,12 +419,44 @@ function describeError(exception: unknown): string {
                 <h1 class="text-3xl font-semibold">Consola de operador</h1>
             </div>
 
-            <div class="flex flex-wrap items-end gap-4">
-                <label class="flex flex-col gap-1 text-sm text-slate-400">
+            <div v-if="session" class="flex flex-wrap items-end gap-4">
+                <div class="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Operador</p>
+                    <p class="text-sm font-medium text-slate-100">{{ session.operator?.name }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Sección</p>
+                    <p class="text-sm font-medium text-slate-100">{{ session.section?.name }}</p>
+                </div>
+            </div>
+        </header>
+
+        <section v-if="!session" class="mx-auto mt-12 max-w-3xl rounded-3xl border border-slate-800 bg-slate-900 p-8">
+            <h2 class="text-2xl font-semibold">Abrir jornada</h2>
+            <p class="mt-2 text-sm text-slate-400">
+                El operador queda vinculado a una sola sección durante la jornada. La ventanilla puede
+                cambiarse después, dejando historial.
+            </p>
+
+            <div class="mt-8 grid gap-5 sm:grid-cols-3">
+                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                    Operador
+                    <select
+                        v-model="selectedOperatorId"
+                        class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+                    >
+                        <option :value="null" disabled>Seleccione</option>
+                        <option v-for="operator in operators" :key="operator.id" :value="operator.id">
+                            {{ operator.name }} · {{ operator.role_label }}
+                        </option>
+                    </select>
+                </label>
+
+                <label class="flex flex-col gap-2 text-sm text-slate-300">
                     Sección
                     <select
-                        v-model="sectionSlug"
-                        class="min-w-56 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                        v-model="selectedSectionSlug"
+                        class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
                     >
                         <option v-for="section in sections" :key="section.slug" :value="section.slug">
                             {{ section.name }}
@@ -170,22 +464,44 @@ function describeError(exception: unknown): string {
                     </select>
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm text-slate-400">
+                <label class="flex flex-col gap-2 text-sm text-slate-300">
                     Ventanilla
-                    <input
-                        v-model="station"
-                        type="text"
-                        maxlength="50"
-                        class="w-48 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                    <select
+                        v-model="selectedStationId"
+                        class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
                     >
+                        <option :value="null" disabled>Seleccione</option>
+                        <option v-for="station in stations" :key="station.id" :value="station.id">
+                            {{ station.name }}
+                        </option>
+                    </select>
                 </label>
             </div>
-        </header>
 
-        <section class="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[2fr_1fr]">
+            <button
+                type="button"
+                class="mt-8 rounded-xl bg-sky-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="busy"
+                @click="openSession"
+            >
+                {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
+            </button>
+
+            <p v-if="operators.length === 0" class="mt-6 text-sm text-amber-300">
+                No hay operadores activos. Cree un usuario operador o ejecute el seeder local
+                <code class="rounded bg-slate-800 px-2 py-1">php artisan db:seed --class=DemoOperatorSeeder</code>.
+            </p>
+        </section>
+
+        <section v-else class="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[2fr_1fr]">
             <div class="rounded-3xl border border-slate-800 bg-slate-900 p-8">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-xl font-semibold">Ticket activo</h2>
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-semibold">Ticket activo</h2>
+                        <p class="mt-1 text-sm text-slate-400">
+                            Ventanilla actual: <span class="text-slate-200">{{ currentStationName || 'sin asignar' }}</span>
+                        </p>
+                    </div>
                     <span class="rounded-full bg-slate-800 px-4 py-1 text-sm text-slate-300">
                         {{ waitingCount }} en espera
                     </span>
@@ -203,6 +519,12 @@ function describeError(exception: unknown): string {
                         </span>
                         <span class="rounded-full bg-slate-800 px-4 py-1 text-slate-300">
                             {{ activeTicket.station_label }}
+                        </span>
+                        <span
+                            v-if="activeTicket.is_transferred"
+                            class="rounded-full bg-amber-500/15 px-4 py-1 text-amber-300"
+                        >
+                            Transferido desde {{ activeTicket.section?.name }}
                         </span>
                     </div>
                 </div>
@@ -247,15 +569,115 @@ function describeError(exception: unknown): string {
                     >
                         Finalizar
                     </button>
+
+                    <button
+                        type="button"
+                        class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                        :disabled="busy || !activeTicket"
+                        @click="reprint"
+                    >
+                        {{ printState === 'printing' ? 'Reimprimiendo…' : 'Reimprimir ticket' }}
+                    </button>
                 </div>
+
+                <p v-if="printState === 'printed'" class="mt-4 text-sm text-emerald-300">
+                    Ticket enviado a la impresora.
+                </p>
+                <p v-else-if="printState === 'failed'" class="mt-4 text-sm text-amber-300">
+                    Fallo de impresión registrado. Puede reintentar con otro driver.
+                </p>
             </div>
 
             <aside class="space-y-4">
                 <div class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                    <h2 class="text-lg font-semibold">Estado de la conexión</h2>
-                    <p class="mt-3 text-sm text-slate-400">
+                    <h2 class="text-lg font-semibold">Ventanilla</h2>
+                    <div class="mt-4 flex flex-col gap-3">
+                        <select
+                            v-model="changeStationId"
+                            class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+                        >
+                            <option v-for="station in sessionStations" :key="station.id" :value="station.id">
+                                {{ station.name }}
+                            </option>
+                        </select>
+                        <button
+                            type="button"
+                            class="rounded-xl border border-slate-700 px-4 py-2 font-semibold text-slate-200 transition hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="busy || changeStationId === session.station?.id"
+                            @click="changeStation"
+                        >
+                            Cambiar ventanilla
+                        </button>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-500">
+                        El cambio queda registrado en el historial de la sesión.
+                    </p>
+                </div>
+
+                <div v-if="canTransfer" class="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6">
+                    <h2 class="text-lg font-semibold text-amber-200">Transferir ticket</h2>
+                    <p class="mt-2 text-sm text-amber-100/70">
+                        Se conserva el código y el número originales; cambia la sección que lo atiende.
+                    </p>
+                    <div class="mt-4 flex flex-col gap-3">
+                        <select
+                            v-model="transferSectionSlug"
+                            class="rounded-xl border border-amber-500/30 bg-slate-950 px-4 py-3 text-slate-100"
+                        >
+                            <option value="">Sección de destino</option>
+                            <option v-for="section in transferSections" :key="section.slug" :value="section.slug">
+                                {{ section.name }}
+                            </option>
+                        </select>
+                        <input
+                            v-model="transferReason"
+                            type="text"
+                            maxlength="255"
+                            placeholder="Motivo (opcional)"
+                            class="rounded-xl border border-amber-500/30 bg-slate-950 px-4 py-3 text-slate-100 placeholder:text-slate-600"
+                        >
+                        <button
+                            type="button"
+                            class="rounded-xl bg-amber-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="busy || !transferSectionSlug"
+                            @click="transfer"
+                        >
+                            Transferir
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                    <h2 class="text-lg font-semibold">Impresora</h2>
+                    <label class="mt-4 flex flex-col gap-2 text-sm text-slate-400">
+                        Driver
+                        <select
+                            v-model="driverKind"
+                            class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
+                            @change="changeDriver"
+                        >
+                            <option value="local">Servicio local</option>
+                            <option value="qz">QZ Tray</option>
+                        </select>
+                    </label>
+                    <p class="mt-4 text-sm text-slate-500">
                         {{ echoClient ? 'Reverb configurado: los cambios se reciben en tiempo real.' : 'Sin Reverb: actualización cada 5 segundos.' }}
                     </p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                    <h2 class="text-lg font-semibold">Sesión</h2>
+                    <p class="mt-2 text-sm text-slate-400">
+                        Abierta el {{ new Date(session.started_at).toLocaleString('es-BO') }}.
+                    </p>
+                    <button
+                        type="button"
+                        class="mt-4 w-full rounded-xl border border-red-500/40 px-4 py-2 font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="busy"
+                        @click="closeSession"
+                    >
+                        Cerrar sesión
+                    </button>
                 </div>
 
                 <div v-if="message" class="rounded-3xl border border-sky-500/40 bg-sky-500/10 p-6 text-sky-200">

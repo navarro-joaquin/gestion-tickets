@@ -12,4 +12,7 @@ enum TicketEventType: string
     case NoShow = 'no_show';
     case Cancelled = 'cancelled';
     case Expired = 'expired';
+    case Transferred = 'transferred';
+    case Reprinted = 'reprinted';
+    case PrintFailed = 'print_failed';
 }

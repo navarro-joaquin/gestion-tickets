@@ -2,6 +2,7 @@
 
 namespace App\Domain\Sections;
 
+use App\Domain\Operations\Station;
 use Database\Factories\Domain\Sections\SectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -41,6 +42,16 @@ class Section extends Model
         return $this->hasMany(SectionTicketCode::class)
             ->orderBy('sort_order')
             ->orderBy('code');
+    }
+
+    /**
+     * @return HasMany<Station, $this>
+     */
+    public function stations(): HasMany
+    {
+        return $this->hasMany(Station::class)
+            ->orderBy('sort_order')
+            ->orderBy('name');
     }
 
     public function getRouteKeyName(): string

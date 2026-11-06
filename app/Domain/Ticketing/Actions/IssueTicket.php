@@ -92,12 +92,14 @@ final class IssueTicket
 
             $ticket = Ticket::query()->create([
                 'section_id' => $section->id,
+                'current_section_id' => $section->id,
                 'section_ticket_code_id' => $ticketCode->id,
                 'category_id' => $category->id,
                 'code' => $ticketCode->code,
                 'period_key' => $periodKey,
                 'number' => $sequence->last_number,
                 'status' => TicketStatus::Waiting,
+                'call_count' => 0,
                 'issued_at' => $now,
             ]);
 
@@ -117,6 +119,6 @@ final class IssueTicket
 
         $this->notifier->notify($sectionSlug);
 
-        return $ticket->load(['section', 'category', 'ticketCode']);
+        return $ticket->load(['section', 'currentSection', 'category', 'ticketCode']);
     }
 }

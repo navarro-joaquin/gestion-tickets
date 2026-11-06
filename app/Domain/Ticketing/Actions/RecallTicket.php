@@ -67,8 +67,8 @@ final class RecallTicket
             return $ticket;
         });
 
-        $this->notifier->notify($ticket->section->slug);
+        $this->notifier->notify($ticket->currentSection?->slug ?? $ticket->section->slug);
 
-        return $ticket->load(['section', 'category', 'operator']);
+        return $ticket->load(['section', 'currentSection', 'category', 'operator']);
     }
 }

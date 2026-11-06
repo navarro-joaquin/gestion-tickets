@@ -24,6 +24,7 @@ class TicketResource extends JsonResource
             'label' => $this->label,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
+            'is_transferred' => ($this->current_section_id ?? $this->section_id) !== $this->section_id,
             'station_label' => $this->station_label,
             'call_count' => $this->call_count,
             'issued_at' => $this->issued_at?->toIso8601String(),
@@ -37,6 +38,17 @@ class TicketResource extends JsonResource
                     'slug' => $this->section->slug,
                     'name' => $this->section->name,
                 ],
+            ),
+            'current_section' => $this->whenLoaded(
+                'currentSection',
+                fn (): ?array => $this->currentSection ? [
+                    'slug' => $this->currentSection->slug,
+                    'name' => $this->currentSection->name,
+                ] : null,
+            ),
+            'transfers' => $this->whenLoaded(
+                'transfers',
+                fn (): array => TicketTransferResource::collection($this->transfers)->resolve(),
             ),
             'category' => $this->whenLoaded(
                 'category',

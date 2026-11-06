@@ -2,6 +2,8 @@
 
 namespace App\Domain\Ticketing\Actions;
 
+use App\Domain\Operations\OperatorSession;
+use App\Domain\Operations\StationAssignment;
 use App\Domain\Ticketing\QueueNotifier;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketEvent;
@@ -31,7 +33,7 @@ final class CloseTicketDay
             $waitingTickets = Ticket::query()
                 ->where('status', TicketStatus::Waiting)
                 ->where('period_key', $periodKey)
-                ->with('section:id,slug')
+                ->with(['section:id,slug', 'currentSection:id,slug'])
                 ->lockForUpdate()
                 ->get();
 
@@ -48,14 +50,14 @@ final class CloseTicketDay
                     'payload' => ['reason' => 'cierre de jornada'],
                 ]);
 
-                $affectedSections[$ticket->section->slug] = true;
+                $affectedSections[$ticket->currentSection?->slug ?? $ticket->section->slug] = true;
                 $expired++;
             }
 
             $calledTickets = Ticket::query()
                 ->where('status', TicketStatus::Called)
                 ->where('period_key', $periodKey)
-                ->with('section:id,slug')
+                ->with(['section:id,slug', 'currentSection:id,slug'])
                 ->lockForUpdate()
                 ->get();
 
@@ -79,14 +81,14 @@ final class CloseTicketDay
                     ],
                 ]);
 
-                $affectedSections[$ticket->section->slug] = true;
+                $affectedSections[$ticket->currentSection?->slug ?? $ticket->section->slug] = true;
                 $noShow++;
             }
 
             $inServiceTickets = Ticket::query()
                 ->where('status', TicketStatus::InService)
                 ->where('period_key', $periodKey)
-                ->with('section:id,slug')
+                ->with(['section:id,slug', 'currentSection:id,slug'])
                 ->lockForUpdate()
                 ->get();
 
@@ -108,9 +110,17 @@ final class CloseTicketDay
                     'payload' => ['reason' => 'cierre de jornada'],
                 ]);
 
-                $affectedSections[$ticket->section->slug] = true;
+                $affectedSections[$ticket->currentSection?->slug ?? $ticket->section->slug] = true;
                 $finished++;
             }
+
+            OperatorSession::query()
+                ->whereNull('ended_at')
+                ->update(['ended_at' => $now]);
+
+            StationAssignment::query()
+                ->whereNull('released_at')
+                ->update(['released_at' => $now]);
         });
 
         foreach (array_keys($affectedSections) as $slug) {

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'section_id',
+    'current_section_id',
     'section_ticket_code_id',
     'category_id',
     'code',
@@ -37,6 +38,13 @@ class Ticket extends Model
 {
     /** @use HasFactory<TicketFactory> */
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::creating(function (Ticket $ticket): void {
+            $ticket->current_section_id ??= $ticket->section_id;
+        });
+    }
 
     /**
      * @return array<string, string>
@@ -62,6 +70,14 @@ class Ticket extends Model
     public function section(): BelongsTo
     {
         return $this->belongsTo(Section::class);
+    }
+
+    /**
+     * @return BelongsTo<Section, $this>
+     */
+    public function currentSection(): BelongsTo
+    {
+        return $this->belongsTo(Section::class, 'current_section_id');
     }
 
     /**
@@ -104,6 +120,14 @@ class Ticket extends Model
         return $this->hasMany(TicketEvent::class)->orderBy('occurred_at');
     }
 
+    /**
+     * @return HasMany<TicketTransfer, $this>
+     */
+    public function transfers(): HasMany
+    {
+        return $this->hasMany(TicketTransfer::class)->orderBy('transferred_at');
+    }
+
     #[Scope]
     protected function waiting(Builder $query): Builder
     {
@@ -125,10 +149,26 @@ class Ticket extends Model
         );
     }
 
+    #[Scope]
+    protected function queuedInSection(Builder $query, Section|int $section): Builder
+    {
+        return $query->where(
+            'current_section_id',
+            $section instanceof Section ? $section->id : $section,
+        );
+    }
+
     protected function displayNumber(): Attribute
     {
         return Attribute::get(
             fn (): string => str_pad((string) $this->number, 3, '0', STR_PAD_LEFT),
+        );
+    }
+
+    protected function isTransferred(): Attribute
+    {
+        return Attribute::get(
+            fn (): bool => ($this->current_section_id ?? $this->section_id) !== $this->section_id,
         );
     }
 
