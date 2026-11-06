@@ -31,6 +31,7 @@ const error = ref('');
 const busy = ref(false);
 const printState = ref<'idle' | 'printing' | 'printed' | 'failed'>('idle');
 const driverKind = ref<PrintDriverKind>('local');
+const printerTarget = ref<string | null>(null);
 
 const echoClient = getEcho();
 let channelName: string | null = null;
@@ -214,6 +215,7 @@ async function useSession(activeSession: OperatorSession): Promise<void> {
         stations.value = sectionStations.data;
     }
 
+    await loadPrinter(activeSession.station?.id ?? null);
     await loadQueue();
     subscribe();
 }
@@ -256,6 +258,7 @@ async function changeStation(): Promise<void> {
         session.value = response.data;
         selectedStationId.value = response.data.station?.id ?? null;
         message.value = response.message;
+        await loadPrinter(response.data.station?.id ?? null);
         await loadQueue();
     } catch (exception) {
         error.value = describeError(exception);
@@ -264,8 +267,27 @@ async function changeStation(): Promise<void> {
     }
 }
 
-async function loadQueue(): Promise<void> {
-    if (!session.value?.section?.slug || !currentStationName.value) {
+async function loadPrinter(stationId: number | null): Promise<void> {
+    printerTarget.value = null;
+
+    if (!stationId) {
+        return;
+    }
+
+    try {
+        const response = await api.consolePrinters(stationId);
+        const printer = response.data[0];
+
+        if (printer) {
+            driverKind.value = printer.driver;
+            printerTarget.value = printer.target;
+        }
+    } catch {
+        // La configuración de impresora es opcional; se conserva el valor local.
+    }
+}
+
+async function loadQueue(): Promise<void> {    if (!session.value?.section?.slug || !currentStationName.value) {
         return;
     }
 
@@ -362,7 +384,7 @@ async function reprint(): Promise<void> {
         const response = await api.reprint(activeTicket.value.id);
 
         try {
-            await createPrintDriver(driverKind.value).print(response.print.escpos_base64);
+            await createPrintDriver(driverKind.value, printerTarget.value).print(response.print.escpos_base64);
             printState.value = 'printed';
             message.value = response.message;
         } catch (printException) {

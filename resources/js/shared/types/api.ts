@@ -35,6 +35,10 @@ export interface Station {
     name: string;
     is_active: boolean;
     sort_order: number;
+    section?: {
+        slug: string;
+        name: string;
+    };
 }
 
 export interface Operator {
@@ -238,5 +242,106 @@ export interface SimulatedQueue {
     totals: {
         general: number;
         preferential: number;
+    };
+}
+
+export interface AdminSection {
+    id: number;
+    slug: string;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+    matrix_confirmed_at: string | null;
+    matrix_confirmed_by: string | null;
+    stations_count?: number;
+    codes: Array<{
+        id: number;
+        code: string;
+        sort_order: number;
+        is_active: boolean;
+        categories: Category[];
+    }>;
+}
+
+export interface AdminUser {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    role_label: string;
+    is_active: boolean;
+    created_at: string | null;
+}
+
+export interface KioskDevice {
+    id: number;
+    name: string;
+    slug: string;
+    token: string;
+    is_active: boolean;
+    last_seen_at: string | null;
+    sections: Array<{
+        id: number;
+        slug: string;
+        name: string;
+        is_active: boolean;
+    }>;
+}
+
+export interface PublicKiosk {
+    id: number;
+    name: string;
+    slug: string;
+    sections: Section[];
+}
+
+export interface Printer {
+    id: number;
+    name: string;
+    driver: 'local' | 'qz';
+    target: string | null;
+    paper_width: number;
+    is_active: boolean;
+    config: Record<string, unknown> | null;
+    station?: {
+        id: number;
+        name: string;
+        section?: {
+            slug: string;
+            name: string;
+        } | null;
+    } | null;
+}
+
+export interface AuditLogEntry {
+    id: number;
+    action: string;
+    entity_type: string;
+    entity_id: number | null;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+    ip_address: string | null;
+    created_at: string | null;
+    user?: {
+        id: number;
+        name: string;
+    } | null;
+}
+
+export interface Paginated<T> {
+    data: T[];
+    links: {
+        first: string | null;
+        last: string | null;
+        prev: string | null;
+        next: string | null;
+    };
+    meta: {
+        current_page: number;
+        from: number | null;
+        last_page: number;
+        per_page: number;
+        to: number | null;
+        total: number;
     };
 }

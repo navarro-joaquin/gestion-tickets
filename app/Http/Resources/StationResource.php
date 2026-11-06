@@ -21,6 +21,13 @@ class StationResource extends JsonResource
             'name' => $this->name,
             'is_active' => $this->is_active,
             'sort_order' => $this->sort_order,
+            'section' => $this->whenLoaded(
+                'section',
+                fn (): array => [
+                    'slug' => $this->section->slug,
+                    'name' => $this->section->name,
+                ],
+            ),
         ];
     }
 }

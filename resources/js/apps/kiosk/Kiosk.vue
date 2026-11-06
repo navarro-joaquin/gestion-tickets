@@ -53,7 +53,16 @@ onBeforeUnmount(() => {
 });
 
 async function loadSections(): Promise<void> {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('quiosco') ?? params.get('kiosk');
+
     try {
+        if (token) {
+            const response = await api.kiosk(token);
+            sections.value = response.data.sections;
+            return;
+        }
+
         const response = await api.sections();
         sections.value = response.data;
     } catch (exception) {

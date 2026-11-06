@@ -1,13 +1,20 @@
 import type {
+    AdminSection,
     AdminSettings,
+    AdminUser,
+    AuditLogEntry,
     AuthUser,
     ConsoleQueue,
     DisplaySnapshot,
     IssuedTicketResponse,
+    KioskDevice,
     Operator,
     OperatorSession,
+    Paginated,
     PrintPayload,
+    Printer,
     PriorityProfile,
+    PublicKiosk,
     Section,
     Service,
     SimulatedQueue,
@@ -255,6 +262,148 @@ export const api = {
             }),
         });
     },
+
+    adminSections(): Promise<{ data: AdminSection[] }> {
+        return request('/admin/sections');
+    },
+
+    updateAdminSection(slug: string, payload: AdminSectionPayload): Promise<{ data: AdminSection; message: string }> {
+        return request(`/admin/sections/${encodeURIComponent(slug)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateSectionMatrix(slug: string, payload: MatrixPayload): Promise<{ data: AdminSection; message: string }> {
+        return request(`/admin/sections/${encodeURIComponent(slug)}/matrix`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    adminStations(section?: string): Promise<{ data: Station[] }> {
+        const query = section ? `?section=${encodeURIComponent(section)}` : '';
+
+        return request(`/admin/stations${query}`);
+    },
+
+    createStation(payload: StationPayload): Promise<{ data: Station; message: string }> {
+        return request('/admin/stations', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateStation(id: number, payload: StationPayload): Promise<{ data: Station; message: string }> {
+        return request(`/admin/stations/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteStation(id: number): Promise<{ message: string }> {
+        return request(`/admin/stations/${id}`, { method: 'DELETE' });
+    },
+
+    adminUsers(): Promise<{ data: AdminUser[] }> {
+        return request('/admin/users');
+    },
+
+    createUser(payload: AdminUserPayload): Promise<{ data: AdminUser; message: string }> {
+        return request('/admin/users', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateUser(id: number, payload: AdminUserPayload): Promise<{ data: AdminUser; message: string }> {
+        return request(`/admin/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteUser(id: number): Promise<{ message: string }> {
+        return request(`/admin/users/${id}`, { method: 'DELETE' });
+    },
+
+    adminKiosks(): Promise<{ data: KioskDevice[] }> {
+        return request('/admin/kiosks');
+    },
+
+    createKiosk(payload: KioskPayload): Promise<{ data: KioskDevice; message: string }> {
+        return request('/admin/kiosks', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateKiosk(id: number, payload: KioskPayload): Promise<{ data: KioskDevice; message: string }> {
+        return request(`/admin/kiosks/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteKiosk(id: number): Promise<{ message: string }> {
+        return request(`/admin/kiosks/${id}`, { method: 'DELETE' });
+    },
+
+    kiosk(token: string): Promise<{ data: PublicKiosk }> {
+        return request(`/kiosks/${encodeURIComponent(token)}`);
+    },
+
+    adminPrinters(): Promise<{ data: Printer[] }> {
+        return request('/admin/printers');
+    },
+
+    createPrinter(payload: PrinterPayload): Promise<{ data: Printer; message: string }> {
+        return request('/admin/printers', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updatePrinter(id: number, payload: PrinterPayload): Promise<{ data: Printer; message: string }> {
+        return request(`/admin/printers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deletePrinter(id: number): Promise<{ message: string }> {
+        return request(`/admin/printers/${id}`, { method: 'DELETE' });
+    },
+
+    consolePrinters(stationId?: number): Promise<{ data: Printer[] }> {
+        const query = stationId ? `?station_id=${stationId}` : '';
+
+        return request(`/console/printers${query}`);
+    },
+
+    auditLogs(params: AuditLogFilters = {}): Promise<Paginated<AuditLogEntry>> {
+        const query = new URLSearchParams();
+
+        if (params.action) {
+            query.set('action', params.action);
+        }
+
+        if (params.entity_type) {
+            query.set('entity_type', params.entity_type);
+        }
+
+        if (params.page) {
+            query.set('page', String(params.page));
+        }
+
+        if (params.per_page) {
+            query.set('per_page', String(params.per_page));
+        }
+
+        const suffix = query.toString();
+
+        return request(`/admin/audit-logs${suffix ? `?${suffix}` : ''}`);
+    },
 };
 
 export interface PriorityProfilePayload {
@@ -283,4 +432,56 @@ export interface ServicePayload {
     effective_to?: string | null;
     sort_order?: number;
     operator_ids?: number[];
+}
+
+export interface AdminSectionPayload {
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+}
+
+export interface MatrixPayload {
+    codes: Array<{
+        code: string;
+        categories: string[];
+    }>;
+}
+
+export interface StationPayload {
+    section?: string;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+}
+
+export interface AdminUserPayload {
+    name: string;
+    email: string;
+    password?: string;
+    role: string;
+    is_active: boolean;
+}
+
+export interface KioskPayload {
+    name: string;
+    slug?: string | null;
+    is_active: boolean;
+    sections: string[];
+}
+
+export interface PrinterPayload {
+    station_id?: number | null;
+    name: string;
+    driver: 'local' | 'qz';
+    target?: string | null;
+    paper_width: number;
+    is_active: boolean;
+    config?: Record<string, unknown> | null;
+}
+
+export interface AuditLogFilters {
+    action?: string;
+    entity_type?: string;
+    page?: number;
+    per_page?: number;
 }

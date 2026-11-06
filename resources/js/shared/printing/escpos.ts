@@ -27,6 +27,8 @@ class LocalServiceDriver implements PrintDriver {
 }
 
 class QzTrayDriver implements PrintDriver {
+    public constructor(private readonly printerName?: string) {}
+
     public async print(escposBase64: string): Promise<void> {
         const module = await import('qz-tray');
         const qz = ((module as unknown as { default?: unknown }).default ?? module) as {
@@ -40,7 +42,7 @@ class QzTrayDriver implements PrintDriver {
             await qz.websocket.connect();
         }
 
-        const printer = await qz.printers.getDefault();
+        const printer = this.printerName ?? await qz.printers.getDefault();
 
         await qz.print(qz.configs.create(printer), [
             { type: 'raw', format: 'base64', data: escposBase64 },
@@ -48,12 +50,12 @@ class QzTrayDriver implements PrintDriver {
     }
 }
 
-export function createPrintDriver(kind: PrintDriverKind): PrintDriver {
+export function createPrintDriver(kind: PrintDriverKind, target?: string | null): PrintDriver {
     if (kind === 'qz') {
-        return new QzTrayDriver();
+        return new QzTrayDriver(target ?? undefined);
     }
 
     return new LocalServiceDriver(
-        import.meta.env.VITE_PRINT_SERVICE_URL ?? 'http://127.0.0.1:9100',
+        target ?? import.meta.env.VITE_PRINT_SERVICE_URL ?? 'http://127.0.0.1:9100',
     );
 }

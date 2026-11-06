@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { api, type PriorityProfilePayload, type ServicePayload } from '../../shared/api/client';
+import AuditPanel from './components/AuditPanel.vue';
+import KiosksPanel from './components/KiosksPanel.vue';
+import PrintersPanel from './components/PrintersPanel.vue';
+import SectionsPanel from './components/SectionsPanel.vue';
+import StationsPanel from './components/StationsPanel.vue';
+import UsersPanel from './components/UsersPanel.vue';
 import type {
     AdminSettings,
     AuthUser,
@@ -11,7 +17,7 @@ import type {
     SimulatedQueue,
 } from '../../shared/types/api';
 
-type Tab = 'settings' | 'priorities' | 'services' | 'simulator';
+type Tab = 'settings' | 'priorities' | 'services' | 'simulator' | 'sections' | 'stations' | 'users' | 'kiosks' | 'printers' | 'audit';
 
 interface ProfileForm {
     name: string;
@@ -45,6 +51,12 @@ const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'settings', label: 'Ajustes' },
     { id: 'priorities', label: 'Prioridades' },
     { id: 'services', label: 'Servicios' },
+    { id: 'sections', label: 'Secciones' },
+    { id: 'stations', label: 'Ventanillas' },
+    { id: 'users', label: 'Usuarios' },
+    { id: 'kiosks', label: 'Quioscos' },
+    { id: 'printers', label: 'Impresoras' },
+    { id: 'audit', label: 'Auditoría' },
     { id: 'simulator', label: 'Simulador' },
 ];
 
@@ -455,7 +467,7 @@ function describeError(exception: unknown): string {
                 <div>
                     <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Gestión de tickets</p>
                     <h1 class="text-3xl font-semibold">Administración</h1>
-                    <p class="mt-2 text-slate-400">Configuración global, prioridades y servicios.</p>
+                    <p class="mt-2 text-slate-400">Configuración global, catálogo, dispositivos y auditoría.</p>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3">
@@ -756,7 +768,7 @@ function describeError(exception: unknown): string {
                 </div>
             </section>
 
-            <section v-else class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
+            <section v-else-if="activeTab === 'simulator'" class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
                 <h2 class="text-xl font-semibold">Simulador de cola</h2>
                 <p class="mt-2 text-sm text-slate-400">
                     Calcula la secuencia de llamados con la proporción y el límite de preferenciales consecutivos.
@@ -804,6 +816,13 @@ function describeError(exception: unknown): string {
                     </div>
                 </div>
             </section>
+
+            <SectionsPanel v-else-if="activeTab === 'sections'" />
+            <StationsPanel v-else-if="activeTab === 'stations'" />
+            <UsersPanel v-else-if="activeTab === 'users'" />
+            <KiosksPanel v-else-if="activeTab === 'kiosks'" />
+            <PrintersPanel v-else-if="activeTab === 'printers'" />
+            <AuditPanel v-else-if="activeTab === 'audit'" />
         </div>
     </main>
 </template>
