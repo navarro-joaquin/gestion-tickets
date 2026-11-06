@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, CATEGORY, JSON_HEADERS, SECTION, csrfTokenFrom } from './lib/config.js';
+import { BASE_URL, CATEGORY, JSON_HEADERS, KIOSK_TOKEN, SECTION, csrfTokenFrom } from './lib/config.js';
 
 /**
  * Emisión concurrente de tickets.
@@ -34,6 +34,10 @@ export const options = {
 
 let csrfToken = null;
 
+if (!KIOSK_TOKEN) {
+    throw new Error('Define KIOSK_TOKEN con el token de un quiosco activo de staging.');
+}
+
 function ensureCsrf() {
     if (csrfToken !== null) {
         return csrfToken;
@@ -54,7 +58,7 @@ export default function () {
 
     const response = http.post(
         `${BASE_URL}/api/v1/tickets`,
-        JSON.stringify({ section: SECTION, category: CATEGORY }),
+        JSON.stringify({ kiosk: KIOSK_TOKEN, section: SECTION, category: CATEGORY }),
         {
             headers: { ...JSON_HEADERS, 'X-XSRF-TOKEN': token },
         },

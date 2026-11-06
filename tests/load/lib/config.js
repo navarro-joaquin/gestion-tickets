@@ -3,6 +3,7 @@ export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
 export const SECTION = __ENV.SECTION || 'plataforma';
 export const CATEGORY = __ENV.CATEGORY || 'general';
 export const DISPLAY_TOKEN = __ENV.DISPLAY_TOKEN || '';
+export const KIOSK_TOKEN = __ENV.KIOSK_TOKEN || '';
 export const OPERATOR_EMAIL = __ENV.OPERATOR_EMAIL || 'operador@demo.local';
 export const OPERATOR_PASSWORD = __ENV.OPERATOR_PASSWORD || 'password';
 

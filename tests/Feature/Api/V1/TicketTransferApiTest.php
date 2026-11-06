@@ -19,6 +19,7 @@ class TicketTransferApiTest extends TestCase
         $this->seedMatrix();
 
         $issued = $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ])->json('data');

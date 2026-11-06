@@ -68,7 +68,7 @@ Registrar `OK`, `FALLA` u `OBSERVADO` y la evidencia (captura, ticket, log).
 | T-UAT-13 | Cierre de jornada | Ejecutar el cierre a la hora configurada | `waiting → expired`, `called → no_show`, `in_service → finished`; sesiones cerradas |
 | T-UAT-14 | Pantalla y audio | Abrir la pantalla con token, activar audio y llamar | Muestra solo las secciones asignadas; timbre y voz con código, número y ventanilla |
 | T-UAT-15 | Pantalla inactiva | Desactivar la pantalla y recargar | Responde 404 o deja de actualizar; el enlace no sirve |
-| T-UAT-16 | Quiosco con token | Abrir el quiosco con su token | Solo muestra las secciones habilitadas |
+| T-UAT-16 | Quiosco con token | Abrir el quiosco con su token | Solo muestra las secciones habilitadas y permite emitir |
 | T-UAT-17 | Reportes | Consultar resumen y detalle por fecha, sección y ventanilla | Totales coherentes con los tickets del día |
 | T-UAT-18 | Exportación CSV | Solicitar exportación y descargar | Archivo con BOM, encabezados y filas; se abre correctamente |
 | T-UAT-19 | Permisos | Un operador intenta abrir administración | 403; no puede ver usuarios, configuración ni reportes |
@@ -77,6 +77,7 @@ Registrar `OK`, `FALLA` u `OBSERVADO` y la evidencia (captura, ticket, log).
 | T-UAT-22 | Respaldo | Ejecutar el respaldo al cierre | Archivo generado y verificable |
 | T-UAT-23 | Restauración | Restaurar en una base temporal | Conteos y datos coinciden; la aplicación funciona |
 | T-UAT-24 | Reinicio | Reiniciar aplicación y worker | La sesión del operador se recupera o se reabre; no hay tickets corruptos |
+| T-UAT-25 | Emisión sin token | `POST /api/v1/tickets` sin `kiosk` o con token inactivo | 422; no se crea el ticket |
 
 ## 6. Métricas del piloto
 
@@ -119,7 +120,7 @@ Severidad:
 
 **Go para expandir si:**
 
-- [ ] Todos los casos T-UAT-01 a T-UAT-24 están `OK` u `OBSERVADO` con mitigación.
+- [ ] Todos los casos T-UAT-01 a T-UAT-25 están `OK` u `OBSERVADO` con mitigación.
 - [ ] Cero incidentes P1.
 - [ ] Los P2 se resolvieron dentro del plazo.
 - [ ] Las métricas cumplen los objetivos acordados.

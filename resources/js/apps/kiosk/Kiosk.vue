@@ -7,6 +7,7 @@ import type { Category, Section, ServiceSummary, Ticket } from '../../shared/typ
 const sections = ref<Section[]>([]);
 const selectedSection = ref<Section | null>(null);
 const ticket = ref<Ticket | null>(null);
+const kioskToken = ref<string | null>(null);
 const error = ref('');
 const busy = ref(false);
 const printState = ref<'idle' | 'printing' | 'printed' | 'failed'>('idle');
@@ -56,15 +57,15 @@ async function loadSections(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('quiosco') ?? params.get('kiosk');
 
-    try {
-        if (token) {
-            const response = await api.kiosk(token);
-            sections.value = response.data.sections;
-            return;
-        }
+    if (!token) {
+        error.value = 'Abre este quiosco con el enlace que incluye su token.';
+        return;
+    }
 
-        const response = await api.sections();
-        sections.value = response.data;
+    try {
+        kioskToken.value = token;
+        const response = await api.kiosk(token);
+        sections.value = response.data.sections;
     } catch (exception) {
         error.value = exception instanceof Error
             ? exception.message
@@ -107,13 +108,23 @@ async function issue(sectionSlug: string, categorySlug?: string, serviceSlug?: s
         return;
     }
 
+    if (!kioskToken.value) {
+        error.value = 'Este quiosco no tiene un token válido.';
+        return;
+    }
+
     busy.value = true;
     error.value = '';
     ticket.value = null;
     printState.value = 'idle';
 
     try {
-        const response = await api.issue(sectionSlug, categorySlug, serviceSlug);
+        const response = await api.issue(
+            kioskToken.value,
+            sectionSlug,
+            categorySlug,
+            serviceSlug,
+        );
         ticket.value = response.data;
 
         printState.value = 'printing';

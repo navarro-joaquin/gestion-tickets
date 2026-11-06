@@ -2,6 +2,7 @@
 
 namespace Tests\Concerns;
 
+use App\Domain\Kiosks\KioskDevice;
 use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use Database\Seeders\CategorySeeder;
@@ -29,5 +30,13 @@ trait SeedsTicketMatrix
     protected function category(string $slug): Category
     {
         return Category::query()->where('slug', $slug)->sole();
+    }
+
+    protected function kioskFor(string $sectionSlug): KioskDevice
+    {
+        $kiosk = KioskDevice::factory()->create();
+        $kiosk->sections()->attach($this->section($sectionSlug)->id);
+
+        return $kiosk;
     }
 }

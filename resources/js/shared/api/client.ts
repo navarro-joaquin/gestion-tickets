@@ -86,10 +86,15 @@ export const api = {
         return request('/sections');
     },
 
-    issue(section: string, category?: string, service?: string): Promise<IssuedTicketResponse> {
+    issue(
+        kiosk: string,
+        section: string,
+        category?: string,
+        service?: string,
+    ): Promise<IssuedTicketResponse> {
         return request('/tickets', {
             method: 'POST',
-            body: JSON.stringify({ section, category, service }),
+            body: JSON.stringify({ kiosk, section, category, service }),
         });
     },
 

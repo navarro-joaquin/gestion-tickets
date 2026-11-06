@@ -36,11 +36,17 @@ Al terminar, se restauran los valores normales y se vuelve a ejecutar
 | `display-polling.js` | Varias pantallas consultando el snapshot cada 5 s | p95 < 400 ms, errores < 0,5 % |
 | `console-polling.js` | Operadores autenticados consultando la cola | p95 < 500 ms, errores < 1 % |
 
+La emisión exige un token de quiosco activo y que la sección esté habilitada
+para ese quiosco. Crear un quiosco de staging en `/admin/quioscos`, copiar su
+token (se muestra al crear el registro) y pasarlo como `KIOSK_TOKEN`. El token
+se invalida si el quiosco se desactiva o se elimina.
+
 ## Ejecución
 
 ```bash
 # Emisión de tickets (sección y categoría configurables)
 k6 run -e BASE_URL=https://staging.example.test \
+  -e KIOSK_TOKEN=<token-del-quiosco> \
   -e SECTION=plataforma -e CATEGORY=general \
   tests/load/ticket-issuance.js
 

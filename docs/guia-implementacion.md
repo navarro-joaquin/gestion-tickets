@@ -750,7 +750,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - `QueueNotifier` y evento `TicketQueueChanged` (`ShouldBroadcastNow`) en el canal `sections.{slug}` con evento `.queue.changed`. Los fallos de broadcast se capturan y no rompen la operación.
 - Impresión `EscPosTicketFormatter`: payload ESC/POS en CP850 con inicialización, tamaño doble, alimentación y corte; el endpoint devuelve `print.escpos_base64` y `print.text`.
 - API v1:
-  - `POST /api/v1/tickets` → emisión; `201` con `data` y `print`.
+  - `POST /api/v1/tickets` → emisión; exige `kiosk` (token activo) y una sección habilitada para ese quiosco; `201` con `data` y `print`.
   - `GET /api/v1/console/queue?section=&station=` → contador en espera y ticket activo de la ventanilla.
   - `POST /api/v1/console/tickets/next` → siguiente ticket; `data: null` si la cola está vacía.
   - `POST /api/v1/console/tickets/{ticket}/recall|start|finish`.
@@ -945,12 +945,17 @@ La fase se ejecutó en tres entregas:
 - La exportación CSV requiere `php artisan queue:work`; sin worker queda en `queued`.
 
 
-### Fase 6 — Endurecimiento y piloto (en curso)
+### Fase 6 — Endurecimiento y piloto (artefactos entregados)
+
+**Estado:** entrega técnica cerrada el 2026-11-06. La ejecución de cargas en
+staging, los simulacros de caos, la restauración en producción y el piloto real
+quedan a cargo del equipo operativo, con los procedimientos ya documentados.
 
 - [x] Escenarios de carga con k6 en `tests/load/` (emisión, pantallas y consola).
   **Pendiente:** ejecutarlos en staging y registrar resultados.
 - [x] Revisión de seguridad y permisos en `docs/seguridad.md`, con correcciones
-  de límites de tasa, cabeceras de seguridad e inyección de fórmulas en CSV.
+  de límites de tasa, cabeceras de seguridad, inyección de fórmulas en CSV y
+  exigencia del token de quiosco en la emisión (S-04).
 - [x] Respaldos: `scripts/backup.sh` y `scripts/backup.ps1`; el respaldo de
   Windows se probó localmente el 2026-11-06 con un volcado válido de 36 tablas.
   Ensayo de restauración local completado el 2026-11-06 en
@@ -1035,7 +1040,7 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 - Cierre manual: `php artisan tickets:day:close --force`.
 - Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola y la pantalla siguen funcionando por polling cada 5 segundos.
 - Operación local: ejecutar `php artisan db:seed` para crear ventanillas, el perfil de prioridad y los usuarios de demostración `operador@demo.local` / `password` y `admin@demo.local` / `password` (solo con `APP_ENV=local`). En producción no se crean esos usuarios.
-- Acceso: `/login` para operadores, supervisores y administradores. La consola (`/consola`) requiere sesión y rol admin, supervisor u operador; `/admin/*` requiere rol admin. El quiosco (`/quiosco`) y la pantalla (`/pantalla`) son públicos.
+- Acceso: `/login` para operadores, supervisores y administradores. La consola (`/consola`) requiere sesión y rol admin, supervisor u operador; `/admin/*` requiere rol admin. El quiosco (`/quiosco`) y la pantalla (`/pantalla`) no exigen login; el quiosco necesita su token para emitir.
 - Administración: `/admin/ajustes` (hora de cierre), `/admin/prioridades` (perfiles y ratios), `/admin/servicios` (catálogo y operadores autorizados) y `/admin/simulador` (secuencia de llamados). La API equivalente vive bajo `/api/v1/admin/*`.
 - La consola abre una sesión por operador y exige una ventanilla; el cambio de ventanilla queda en `station_assignments`.
 - La pantalla `/pantalla` se suscribe a todas las secciones activas y muestra el último llamado y los anteriores.
@@ -1135,7 +1140,7 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Servicios:** el catálogo es genérico y editable desde `/admin/servicios`. Un servicio pertenece a una sección, usa el código general de esa sección y añade su etiqueta al ticket (`A-001 · VIS`). Se valida por estado, días ISO, ventana horaria y vigencia.
 - **Autorización por servicio:** un operador solo puede llamar tickets de servicios para los que está autorizado. Los tickets sin servicio no requieren autorización. La autorización se administra por servicio desde la API de administración.
 - **Autenticación:** login propio por sesión, sin paquetes nuevos, con rate limiting. El usuario debe estar activo. Roles: administrador, supervisor y operador. La API usa la misma sesión y exige el token CSRF en las peticiones mutables.
-- **Protección de rutas:** quiosco y pantalla son públicos; la consola exige sesión y rol admin/supervisor/operador; la administración exige rol admin. La emisión de tickets y el snapshot de pantalla siguen siendo públicos porque los usan el quiosco y la pantalla.
+- **Protección de rutas:** quiosco y pantalla no exigen login; la consola exige sesión y rol admin/supervisor/operador; la administración exige rol admin. La emisión de tickets exige el token de un quiosco activo y el snapshot de pantalla es público (filtrado si recibe token de pantalla).
 - **Política de tickets:** operar, transferir y reimprimir exigen una sesión activa en la sección actual del ticket. Un administrador conserva acceso total por `Gate::before`, pero las acciones de consola siguen requiriendo sesión de operador.
 - **Cierre de jornada:** sin cambios respecto de la Fase 3; las sesiones y asignaciones se cierran junto con los tickets.
 
@@ -1145,7 +1150,7 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Secciones:** el nombre, estado y orden son editables; si la sección tiene tickets activos se bloquea la edición para no romper la operación en curso.
 - **Matriz:** solo se permite remapear las categorías de los tres códigos existentes. No se pueden crear códigos nuevos desde la interfaz; el cambio exige confirmación explícita y se valida con `SectionMatrixValidator`.
 - **Usuarios:** el alta y la edición usan `AdminUserRequest`; la baja es lógica (`is_active=false`) para conservar el historial de tickets y auditoría.
-- **Quioscos:** `kiosk_devices` guarda un token aleatorio de 48 caracteres y una lista de secciones activas. La URL pública es `/quiosco?quiosco={token}`.
+- **Quioscos:** `kiosk_devices` guarda un token aleatorio de 48 caracteres y una lista de secciones activas. La URL pública es `/quiosco?quiosco={token}`. La emisión (`POST /api/v1/tickets`) exige ese token y que la sección solicitada esté habilitada para el quiosco.
 - **Impresoras:** cada impresora pertenece opcionalmente a una ventanilla y declara driver (`local` o `qz`), destino, ancho de papel y configuración adicional.
 - **Autorización:** todos los endpoints de administración exigen rol `admin`; la consola exige sesión y rol admin/supervisor/operador.
 
@@ -1215,4 +1220,4 @@ Decisiones adoptadas al implementar la Fase 4:
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06. Las fases 1 a 5 están completadas; la Fase 6 tiene los artefactos de endurecimiento listos (cargas k6, revisión de seguridad, respaldos, runbook y plan de UAT/piloto), pero **las pruebas de carga, los simulacros de caos, el ensayo de restauración y el piloto aún no se ejecutaron**. La suite automatizada está en verde; no se ha validado el sistema en operación real ni con impresoras físicas. El quiosco y la pantalla siguen siendo públicos. Cualquier avance debe reflejarse aquí, en `docs/seguridad.md`, `docs/runbook-operacion.md` y `docs/piloto-uat.md`.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06. Las fases 1 a 5 están completadas; la Fase 6 tiene los artefactos de endurecimiento listos (cargas k6, revisión de seguridad, respaldos, runbook y plan de UAT/piloto) y el ensayo local de restauración verificado, pero **las pruebas de carga, los simulacros de caos, el ensayo de restauración en producción y el piloto aún no se ejecutaron**. La suite automatizada está en verde; no se ha validado el sistema en operación real ni con impresoras físicas. El quiosco y la pantalla no exigen login, pero el quiosco necesita su token para emitir. Cualquier avance debe reflejarse aquí, en `docs/seguridad.md`, `docs/runbook-operacion.md` y `docs/piloto-uat.md`.

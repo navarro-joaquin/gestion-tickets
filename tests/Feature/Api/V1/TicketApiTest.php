@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Domain\Kiosks\KioskDevice;
 use App\Domain\Operations\Station;
 use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\IssueTicket;
@@ -20,6 +21,7 @@ class TicketApiTest extends TestCase
         $this->seedMatrix();
 
         $response = $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ]);
@@ -43,7 +45,7 @@ class TicketApiTest extends TestCase
 
         $this->postJson('/api/v1/tickets', [])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['section', 'category']);
+            ->assertJsonValidationErrors(['kiosk', 'section', 'category']);
     }
 
     public function test_issue_endpoint_rejects_an_inactive_section(): void
@@ -53,6 +55,7 @@ class TicketApiTest extends TestCase
         $this->section('plataforma')->update(['is_active' => false]);
 
         $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ])
@@ -60,11 +63,67 @@ class TicketApiTest extends TestCase
             ->assertJsonValidationErrors(['section']);
     }
 
+    public function test_issue_endpoint_requires_an_active_kiosk_token(): void
+    {
+        $this->seedMatrix();
+
+        $payload = [
+            'section' => 'plataforma',
+            'category' => 'general',
+        ];
+
+        $this->postJson('/api/v1/tickets', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kiosk']);
+
+        $this->postJson('/api/v1/tickets', [
+            ...$payload,
+            'kiosk' => 'token-inexistente',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kiosk']);
+
+        $this->postJson('/api/v1/tickets', [
+            ...$payload,
+            'kiosk' => ['no-es-un-token'],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kiosk']);
+
+        $inactive = KioskDevice::factory()->inactive()->create();
+        $inactive->sections()->attach($this->section('plataforma')->id);
+
+        $this->postJson('/api/v1/tickets', [
+            ...$payload,
+            'kiosk' => $inactive->token,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['kiosk']);
+
+        $this->assertDatabaseCount('tickets', 0);
+    }
+
+    public function test_issue_endpoint_rejects_a_section_not_assigned_to_the_kiosk(): void
+    {
+        $this->seedMatrix();
+
+        $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('odeco')->token,
+            'section' => 'plataforma',
+            'category' => 'general',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['section']);
+
+        $this->assertDatabaseCount('tickets', 0);
+    }
+
     public function test_console_endpoints_walk_the_ticket_through_its_lifecycle(): void
     {
         $this->seedMatrix();
 
         $issued = $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ])->json('data');

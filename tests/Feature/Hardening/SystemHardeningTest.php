@@ -36,6 +36,7 @@ class SystemHardeningTest extends TestCase
         $this->seedMatrix();
 
         $payload = [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ];
@@ -84,6 +85,7 @@ class SystemHardeningTest extends TestCase
         Broadcast::swap($manager);
 
         $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
             'section' => 'plataforma',
             'category' => 'general',
         ])->assertCreated();

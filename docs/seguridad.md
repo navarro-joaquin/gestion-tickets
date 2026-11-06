@@ -11,7 +11,7 @@
 | S-01 | Endpoints públicos sin límite de tasa | Alta | Corregido: `throttle` por IP en catálogo, emisión y snapshot |
 | S-02 | Respuestas sin cabeceras de seguridad | Media | Corregido: `SecurityHeaders` global |
 | S-03 | Inyección de fórmulas en exportaciones CSV | Media | Corregido: neutralización de celdas que empiezan con `= + - @` |
-| S-04 | Emisión pública no ligada al token del quiosco | Media | Riesgo aceptado temporalmente; mitigado por red y límite de tasa. Pendiente decisión de producto |
+| S-04 | Emisión pública sin token de quiosco | Media | Corregido: `POST /api/v1/tickets` exige un token de quiosco activo y la sección habilitada |
 | S-05 | Tokens de quiosco y pantalla viajan en la URL | Baja | Aceptado; `Referrer-Policy: no-referrer` y rotación de token |
 | S-06 | Cookies de sesión sin `Secure` por defecto | Media | Requiere configuración de producción (`SESSION_SECURE_COOKIE=true`) |
 | S-07 | Secretos de Reverb de ejemplo | Alta si se reutilizan | Requiere rotación en producción; documentado en el runbook |
@@ -59,17 +59,25 @@ a los valores que empiezan con `=`, `+`, `-`, `@`, tabulador o retorno de carro.
 
 ### S-04 Emisión sin token de quiosco
 
-`POST /api/v1/tickets` acepta `section`, `category` o `service` y no exige el
-token del quiosco. Cualquier cliente con acceso a la red puede emitir tickets.
-El quiosco sí usa token para listar sus secciones, pero la emisión no lo valida.
+`POST /api/v1/tickets` exigía solo `section`, `category` o `service`; cualquier
+cliente con acceso a la red podía emitir tickets. Ahora la emisión requiere el
+campo `kiosk` con el token de un quiosco activo y la sección solicitada debe
+estar habilitada para ese quiosco (`IssueTicketRequest`). El quiosco envía su
+token desde el enlace `?quiosco={token}`.
 
-**Decisión pendiente:** convertir el token de quiosco en obligatorio para emitir
-(y actualizar el frontend) o mantenerlo público dentro de una red aislada. Hasta
-que se decida, la mitigación es:
+La validación devuelve `422` con un mensaje genérico tanto para tokens
+inexistentes como inactivos, y no crea el ticket. Se mantienen además:
 
-1. Publicar el quiosco solo en la red interna o VLAN de atención.
-2. Mantener el límite de 30 emisiones/min por IP.
-3. Revisar diariamente tickets emitidos fuera del horario o en volumen anómalo.
+1. El límite de 30 emisiones/min por IP.
+2. La recomendación de publicar el quiosco solo en la red interna o VLAN de
+   atención.
+3. La revisión de tickets emitidos fuera de horario o en volumen anómalo.
+
+**Limitación:** el token viaja en la URL del quiosco (ver S-05). Rotarlo exige
+eliminar y recrear el quiosco, o actualizar el registro en base de datos.
+
+**Verificación:** `Tests\Feature\Api\V1\TicketApiTest` (token ausente, inválido,
+inactivo y sección no asignada).
 
 ### S-05 Tokens en la URL
 
@@ -77,7 +85,8 @@ Los enlaces `/quiosco?quiosco={token}` y `/pantalla?pantalla={token}` exponen el
 token en el historial y en registros de proxy. Mitigaciones aplicadas:
 
 - `Referrer-Policy: no-referrer` evita filtrarlo por referer.
-- El token se puede regenerar desde administración.
+- El token de pantalla se puede regenerar desde administración; el de quiosco
+  se rota eliminando y recreando el quiosco.
 - El token de pantalla solo permite leer el snapshot de sus secciones; no da
   acceso a la consola ni a administración.
 
@@ -140,6 +149,8 @@ una alteración.
 - Un operador solo puede operar tickets de su sección y asignados a él
   (`TicketPolicy`).
 - La pantalla pública no recibe datos personales.
+- La emisión exige un token de quiosco activo y que la sección esté habilitada
+  para ese quiosco.
 - Los archivos multimedia se validan por MIME y el tipo declarado debe
   coincidir con el archivo.
 - Las exportaciones y descargas exigen rol `admin`.
@@ -163,8 +174,7 @@ una alteración.
 
 ## Pendientes recomendados
 
-1. Decidir si la emisión exige token de quiosco (S-04).
-2. Evaluar CSP en staging (S-08).
-3. Añadir alertas automáticas de volumen anómalo de emisión y de tickets
+1. Evaluar CSP en staging (S-08).
+2. Añadir alertas automáticas de volumen anómalo de emisión y de tickets
    emitidos fuera de horario.
-4. Revisar permisos de base de datos con el equipo de infraestructura (S-10).
+3. Revisar permisos de base de datos con el equipo de infraestructura (S-10).
