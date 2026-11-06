@@ -67,6 +67,34 @@ class DisplayMediaTest extends TestCase
         $this->assertDatabaseCount('media_assets', 0);
     }
 
+    public function test_media_upload_rejects_a_file_that_does_not_match_the_declared_type(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->post('/api/v1/admin/media', [
+                'name' => 'Imagen declarada como video',
+                'type' => 'video',
+                'file' => UploadedFile::fake()->image('promocional.jpg', 640, 480),
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->assertDatabaseCount('media_assets', 0);
+
+        $this->actingAs($admin)
+            ->post('/api/v1/admin/media', [
+                'name' => 'Video declarado como imagen',
+                'type' => 'image',
+                'file' => UploadedFile::fake()->create('clip.mp4', 2048, 'video/mp4'),
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->assertDatabaseCount('media_assets', 0);
+    }
+
     public function test_only_admins_can_manage_media_playlists_and_displays(): void
     {
         $operator = User::factory()->create();

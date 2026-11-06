@@ -59,7 +59,9 @@ function edit(display: DisplayDevice): void {
         slug: display.slug,
         layout: display.layout,
         is_active: display.is_active,
-        sections: display.sections.map((section) => section.slug),
+        sections: display.sections
+            .filter((section) => section.is_active)
+            .map((section) => section.slug),
         playlists: display.playlists.map((playlist) => playlist.id),
     };
 }

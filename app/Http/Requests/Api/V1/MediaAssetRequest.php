@@ -18,6 +18,10 @@ class MediaAssetRequest extends FormRequest
      */
     public function rules(): array
     {
+        $mimeRule = $this->input('type') === MediaAsset::TYPE_VIDEO
+            ? 'mimetypes:video/mp4,video/webm'
+            : 'mimetypes:image/jpeg,image/png,image/webp,image/gif';
+
         return [
             'name' => ['required', 'string', 'max:120'],
             'type' => ['required', Rule::in([MediaAsset::TYPE_IMAGE, MediaAsset::TYPE_VIDEO])],
@@ -27,7 +31,7 @@ class MediaAssetRequest extends FormRequest
                 $this->isMethod('post') ? 'required' : 'prohibited',
                 'file',
                 'max:194560',
-                'mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm',
+                $mimeRule,
             ],
         ];
     }
