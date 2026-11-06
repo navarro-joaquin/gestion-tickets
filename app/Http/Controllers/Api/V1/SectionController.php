@@ -13,7 +13,7 @@ class SectionController extends Controller
     {
         $sections = Section::query()
             ->where('is_active', true)
-            ->with('ticketCodes.categories')
+            ->with(['ticketCodes.categories', 'services'])
             ->orderBy('sort_order')
             ->orderBy('slug')
             ->get();
@@ -25,7 +25,7 @@ class SectionController extends Controller
     {
         abort_unless($section->is_active, 404);
 
-        $section->load('ticketCodes.categories');
+        $section->load(['ticketCodes.categories', 'services']);
 
         return new SectionResource($section);
     }

@@ -3,13 +3,16 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Domain\Settings\DayClosingSchedule;
+use App\Domain\Users\UserRole;
+use App\Models\User;
 use Tests\TestCase;
 
 class AdminSettingsApiTest extends TestCase
 {
     public function test_show_returns_the_default_closing_time(): void
     {
-        $this->getJson('/api/v1/admin/settings')
+        $this->actingAs($this->admin())
+            ->getJson('/api/v1/admin/settings')
             ->assertOk()
             ->assertJsonPath('data.closing_time', '16:30')
             ->assertJsonPath('data.timezone', 'America/La_Paz')
@@ -20,9 +23,10 @@ class AdminSettingsApiTest extends TestCase
 
     public function test_update_persists_the_closing_time(): void
     {
-        $this->putJson('/api/v1/admin/settings', [
-            'closing_time' => '18:45',
-        ])
+        $this->actingAs($this->admin())
+            ->putJson('/api/v1/admin/settings', [
+                'closing_time' => '18:45',
+            ])
             ->assertOk()
             ->assertJsonPath('data.closing_time', '18:45')
             ->assertJsonPath('message', 'Hora de cierre actualizada.');
@@ -36,9 +40,10 @@ class AdminSettingsApiTest extends TestCase
 
     public function test_update_rejects_an_invalid_time(): void
     {
-        $this->putJson('/api/v1/admin/settings', [
-            'closing_time' => '25:00',
-        ])
+        $this->actingAs($this->admin())
+            ->putJson('/api/v1/admin/settings', [
+                'closing_time' => '25:00',
+            ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['closing_time']);
 
@@ -47,8 +52,14 @@ class AdminSettingsApiTest extends TestCase
 
     public function test_update_requires_the_closing_time(): void
     {
-        $this->putJson('/api/v1/admin/settings', [])
+        $this->actingAs($this->admin())
+            ->putJson('/api/v1/admin/settings', [])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['closing_time']);
+    }
+
+    private function admin(): User
+    {
+        return User::factory()->create(['role' => UserRole::Admin]);
     }
 }

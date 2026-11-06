@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domain\Sections\Category;
 use App\Domain\Sections\SectionTicketCode;
+use App\Domain\Services\Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,6 +34,23 @@ class SectionResource extends JsonResource
                             ])
                             ->values()
                             ->all(),
+                    ])
+                    ->values()
+                    ->all(),
+            ),
+            'services' => $this->whenLoaded(
+                'services',
+                fn (): array => $this->services
+                    ->filter(fn (Service $service): bool => $service->isAvailableAt(now()))
+                    ->map(fn (Service $service): array => [
+                        'id' => $service->id,
+                        'slug' => $service->slug,
+                        'name' => $service->name,
+                        'label' => $service->label,
+                        'description' => $service->description,
+                        'available_from' => $service->available_from,
+                        'available_to' => $service->available_to,
+                        'available_days' => $service->available_days,
                     ])
                     ->values()
                     ->all(),

@@ -1,7 +1,7 @@
 # Guía de implementación — Gestión de Tickets
 
 **Proyecto:** `gestion-tickets`  
-**Estado:** Fases 1, 2 y 3 completadas; operación con ventanillas, sesiones y transferencias en entorno local.  
+**Estado:** Fases 1 a 4 completadas; prioridades, servicios, autenticación y administración base en entorno local.  
 **Última actualización:** 2026-11-06
 
 ---
@@ -10,7 +10,7 @@
 
 Documentar cómo está montado el proyecto, cómo levantarlo y en qué orden implementar el sistema de generación y gestión de tickets descrito en el diseño técnico. Es un documento vivo: debe actualizarse cuando se cierren decisiones pendientes o cambie la infraestructura.
 
-Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1), el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2) y la operación con ventanillas, sesiones de operador, transferencias entre secciones y pantalla de llamados (Fase 3). Las prioridades, la administración completa, los reportes y la multimedia siguen pendientes (Fases 4 a 6).
+Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1), el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2), la operación con ventanillas, sesiones de operador, transferencias entre secciones y pantalla de llamados (Fase 3), y las prioridades con aging, los servicios exclusivos y la autenticación con roles (Fase 4). La administración completa, los reportes y la multimedia siguen pendientes (Fases 5 y 6).
 
 ---
 
@@ -28,8 +28,8 @@ Esta guía describe el estado real del repositorio. A la fecha están implementa
 | Laravel Boost | 2.10.4 (dev) |
 | Frontend | Vite 8 + Tailwind 4 + Vue 3 + TypeScript; apps `kiosk`, `console`, `display` y `admin` |
 | Redis / Reverb / Echo | Reverb instalado (`dev-main`) y Echo/Pusher JS en el frontend; Redis no habilitado todavía |
-| Módulos de dominio | Fases 1, 2 y 3: matriz de códigos, núcleo de tickets, ajuste de hora de cierre, ventanillas, sesiones, transferencias e impresión operativa |
-| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events`, `settings`, `stations`, `operator_sessions`, `station_assignments`, `ticket_transfers`, `tickets.current_section_id` y clave única de ventanilla activa por sección |
+| Módulos de dominio | Fases 1 a 4: matriz de códigos, núcleo de tickets, ajuste de hora de cierre, ventanillas, sesiones, transferencias, prioridades con aging, servicios exclusivos, autenticación y administración base |
+| Migraciones ejecutadas | Base de Laravel + `sections`, `categories`, `section_ticket_codes`, `section_code_category`, `users.role`/`is_active`, `ticket_sequences`, `tickets`, `ticket_assignments`, `ticket_events`, `settings`, `stations`, `operator_sessions`, `station_assignments`, `ticket_transfers`, `tickets.current_section_id`, clave única de ventanilla activa por sección, `priority_profiles`, `services`, `service_user` y columnas de prioridad/servicio en `tickets` |
 
 ### Archivos relevantes creados
 
@@ -42,32 +42,37 @@ gestion-tickets/
 │   ├── Domain/
 │   │   ├── Sections/             # Fase 1: secciones, categorías, matriz y gate
 │   │   ├── Settings/             # Hora de cierre configurable
+│   │   ├── Priorities/           # Fase 4: perfiles, selector 2:1, aging y simulador
+│   │   ├── Services/             # Fase 4: catálogo de servicios y ventanas
 │   │   ├── Operations/           # Fase 3: ventanillas, sesiones y transferencias
 │   │   └── Ticketing/            # Fase 2: modelos, acciones y formateador ESC/POS
 │   ├── Console/Commands/         # tickets:no-show, tickets:day:close
 │   ├── Events/TicketQueueChanged.php
 │   └── Http/
-│       ├── Controllers/Api/V1/   # Section, Ticket, Console, OperatorSession, Display, AdminSettings
+│       ├── Controllers/Api/V1/   # Section, Ticket, Console, OperatorSession, Display, AdminSettings, Auth, PriorityProfile, Service, QueueSimulator, AdminUser
+│       ├── Controllers/Auth/     # Login/logout web
+│       ├── Middleware/           # EnsureUserIsActive, EnsureUserHasRole
 │       ├── Requests/Api/V1/
-│       └── Resources/            # Ticket, TicketTransfer, Operator, OperatorSession y Station
+│       ├── Requests/Auth/
+│       └── Resources/            # Ticket, TicketTransfer, Operator, OperatorSession, Station, PriorityProfile, Service y AuthenticatedUser
 ├── database/
-│   ├── migrations/               # Fases 1 a 3 + settings
-│   ├── factories/Domain/         # Ticketing y Operations
-│   └── seeders/                  # Category, Section, Station y DemoOperator (solo local)
+│   ├── migrations/               # Fases 1 a 4 + settings
+│   ├── factories/Domain/         # Ticketing, Operations, Priorities y Services
+│   └── seeders/                  # Category, Section, Station, PriorityProfile y DemoOperator (solo local)
 ├── resources/
 │   ├── js/
-│   │   ├── apps/kiosk/           # Quiosco Vue 3
-│   │   ├── apps/console/         # Consola Vue 3 con sesiones y transferencias
+│   │   ├── apps/kiosk/           # Quiosco Vue 3 con servicios exclusivos
+│   │   ├── apps/console/         # Consola autenticada con sesiones y transferencias
 │   │   ├── apps/display/         # Pantalla de llamados
-│   │   ├── apps/admin/           # Administración: hora de cierre
+│   │   ├── apps/admin/           # Administración: ajustes, prioridades, servicios y simulador
 │   │   └── shared/               # API, tipos, Echo e impresión
-│   └── views/                    # kiosk, console, display y admin (Blade)
+│   └── views/                    # login, kiosk, console, display y admin (Blade)
 ├── routes/
 │   ├── api.php                   # API v1
 │   ├── channels.php              # Canal sections.{slug}
 │   └── console.php               # Scheduler
 ├── tests/
-│   ├── Feature/                  # T-MAP, T-SEQ, T-OPS, API
+│   ├── Feature/                  # T-MAP, T-SEQ, T-OPS, T-PRIO, T-SVC, T-AUTH, API
 │   └── Unit/Ticketing/           # Máquina de estados
 └── docs/
     ├── guia-implementacion.md              # Este documento
@@ -565,6 +570,66 @@ Almacén clave-valor para configuración global. La hora de cierre se guarda com
 
 Índices `(ticket_id, transferred_at)` y `(to_section_id, transferred_at)`. Es un historial append-only de transferencias; cada transferencia también genera un evento `transferred` en `ticket_events`. La transferencia conserva `code` y `number`, actualiza `current_section_id` y deja `section_id` intacto.
 
+### 9.15 `priority_profiles`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `name` | varchar(80) | único |
+| `description` | varchar(255) nullable | — |
+| `general_ratio` | tinyint unsigned | generales por ciclo; por defecto 2 |
+| `preferential_ratio` | tinyint unsigned | preferenciales por ciclo; por defecto 1 |
+| `aging_minutes` | smallint unsigned | minutos para forzar el grupo más antiguo; por defecto 30 |
+| `max_consecutive_preferential` | tinyint unsigned | máximo de preferenciales seguidos; por defecto 1 |
+| `is_active` | boolean | — |
+| `effective_from` / `effective_to` | date nullable | vigencia |
+| `timestamps` | — | — |
+
+Índice `(is_active, effective_from, effective_to)`. Los perfiles son **globales** (no por sección). El resolvedor usa el primer perfil activo y vigente; si no existe, aplica el perfil fallback “Estándar 2:1” sin persistir.
+
+### 9.16 `services`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `section_id` | FK `sections` | sección dueña del servicio |
+| `slug` | varchar(80) | único por sección |
+| `name` | varchar(120) | nombre visible |
+| `label` | varchar(20) | etiqueta que acompaña al código general |
+| `description` | varchar(255) nullable | — |
+| `is_active` | boolean | — |
+| `available_days` | json nullable | días ISO 1–7; vacío = todos |
+| `available_from` / `available_to` | time nullable | ventana horaria |
+| `effective_from` / `effective_to` | date nullable | vigencia |
+| `sort_order` | smallint unsigned | orden de presentación |
+| `timestamps` | — | — |
+
+Índice `(section_id, is_active, sort_order)`. Un ticket de servicio usa la categoría `general`, el código general de la sección y guarda la etiqueta en `tickets.service_label`.
+
+### 9.17 `service_user`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | bigint unsigned | PK |
+| `service_id` | FK `services` | `cascadeOnDelete` |
+| `user_id` | FK `users` | `cascadeOnDelete` |
+| `timestamps` | — | — |
+
+Único `(service_id, user_id)` e índice por `user_id`. Autoriza a un operador o supervisor a llamar tickets del servicio. Los tickets sin servicio no requieren autorización.
+
+### 9.18 Columnas de prioridad y servicio en `tickets`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `service_id` | FK `services` nullable | `nullOnDelete` |
+| `service_label` | varchar(20) nullable | copia de la etiqueta al emitir |
+| `is_preferential` | boolean | derivado de la categoría o del servicio |
+| `priority_profile_id` | FK `priority_profiles` nullable | perfil aplicado en el último llamado |
+| `priority_score` | int unsigned | score calculado |
+| `priority_snapshot` | json nullable | ratios, grupo, motivo, espera y score |
+
+Índice `(current_section_id, status, is_preferential, issued_at)` para la cola.
+
 ---
 
 ## 10. Estructura de carpetas objetivo
@@ -764,18 +829,57 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - La transferencia no recalcula prioridad ni autoriza por rol; esas reglas llegan con la Fase 4.
 - Reverb sigue siendo `dev-main` y `BROADCAST_CONNECTION=log` por defecto; sin Reverb la pantalla y la consola usan polling cada 5 segundos.
 
-### Fase 4 — Prioridades y servicios
+### Fase 4 — Prioridades, servicios y autenticación (completada el 2026-11-06)
 
-- [ ] Perfiles de prioridad por sección con vigencia.
-- [ ] Proporción configurable de llamados (actual 2 generales : 1 preferencial).
-- [ ] Cálculo de score con aging y snapshot en ticket.
-- [ ] Regla dura de generales y límite de consecutivos.
-- [ ] Simulador de cola.
-- [ ] Servicios permanentes/temporales con ventanas.
-- [ ] Autorización de operadores por servicio en backend.
-- [ ] Pruebas T-PRIO y T-AUTH.
+- [x] Perfiles de prioridad globales con vigencia.
+- [x] Proporción configurable de llamados (actual 2 generales : 1 preferencial).
+- [x] Cálculo de score con aging y snapshot en ticket.
+- [x] Regla dura de generales y límite de consecutivos.
+- [x] Simulador de cola.
+- [x] Servicios permanentes/temporales con ventanas.
+- [x] Autorización de operadores por servicio en backend.
+- [x] Autenticación con login propio por sesión y roles.
+- [x] Pruebas T-PRIO, T-SVC y T-AUTH.
 
 **Salida:** configuración aprobada por negocio y autorización exclusiva validada con 403 real.
+
+**Entregables de Fase 4:**
+
+- Migraciones `priority_profiles`, `services`, `service_user` y columnas `service_id`, `service_label`, `is_preferential`, `priority_profile_id`, `priority_score` y `priority_snapshot` en `tickets`.
+- Modelos `PriorityProfile` y `Service` con factories; relaciones `Section::services()`, `User::authorizedServices()`, `Ticket::service()` y `Ticket::priorityProfile()`.
+- Motor de prioridad en `app/Domain/Priorities/`:
+  - `PriorityProfileResolver`: primer perfil activo y vigente; fallback “Estándar 2:1”.
+  - `QueuePrioritySelector`: ratio configurable, aging sobre el ticket más antiguo, máximo de preferenciales consecutivos y snapshot completo (ratios, llamados del día, grupo, motivo, espera y score).
+  - `QueueSimulator`: secuencia sin tocar la base de datos.
+- `IssueTicket` acepta `service` como alternativa a `category`; los servicios se validan por día, horario, vigencia y estado, y usan el código general de la sección.
+- `CallNextTicket` usa el selector 2:1, registra el snapshot y solo considera servicios autorizados para el operador.
+- Autenticación:
+  - Login web por sesión en `/login` con rate limiting y `remember`.
+  - Middleware `active` y `role`; alias registrados en `bootstrap/app.php`.
+  - Grupo API con sesión y CSRF (`XSRF-TOKEN` / `X-XSRF-TOKEN`).
+  - `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`.
+  - Rutas web protegidas: `/consola` (admin, supervisor u operador) y `/admin/*` (solo admin); quiosco y pantalla siguen públicos.
+  - API pública: secciones, emisión de tickets y snapshot de pantalla. Consola y administración requieren autenticación.
+- Administración:
+  - CRUD de perfiles de prioridad y de servicios con operadores autorizados.
+  - `GET /api/v1/admin/operators` para asignar autorizaciones.
+  - Simulador `POST /api/v1/admin/queue/simulate`.
+  - `TicketPolicy` para operar, transferir y reimprimir tickets de la sección de la sesión activa.
+- Frontend:
+  - Consola autenticada, sin selector de operador, con cierre de sesión y badges de preferencial/servicio.
+  - Quiosco con bloque de servicios exclusivos disponibles.
+  - Administración con pestañas Ajustes, Prioridades, Servicios y Simulador.
+- Seeder `PriorityProfileSeeder` (perfil “Estándar 2:1”). El usuario de demostración sigue creándose solo con `APP_ENV=local`.
+- Pruebas: **127 pruebas, 494 aserciones en verde**, incluidas T-PRIO, T-SVC y T-AUTH.
+
+**Limitaciones conocidas de la Fase 4:**
+
+- La administración de secciones, ventanillas, operadores, impresoras y matriz de códigos sigue pendiente (Fase 5). Los usuarios se gestionan por base de datos o seeders.
+- No hay recuperación de contraseña ni gestión de usuarios desde la interfaz.
+- El catálogo de servicios es genérico; los datos reales deben cargarse desde `/admin/servicios` o por seeder.
+- El anuncio por voz (ring + TTS) sigue pendiente (Fase 5).
+- El simulador no descuenta autorizaciones por servicio ni aging sobre datos reales: simula solo la secuencia de grupos con el perfil elegido.
+- Reverb sigue siendo `dev-main` y `BROADCAST_CONNECTION=log` por defecto; sin Reverb la pantalla y la consola usan polling cada 5 segundos.
 
 ### Fase 5 — Administración, reportes y multimedia
 
@@ -845,11 +949,14 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 3: **96 pruebas, 352 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 4: **127 pruebas, 494 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
 - T-OPS: sesiones de operador, ventanillas, cambio de ventanilla, transferencias, reimpresión, fallos de impresión, cierre de sesiones y aislamiento de ventanillas por sección.
+- T-PRIO: secuencia 2:1, aging en ambos sentidos, máximo de preferenciales consecutivos, snapshot y perfil fallback.
+- T-SVC: disponibilidad por día, horario y vigencia; código general y etiqueta; autorización por servicio; CRUD de administración y desactivación con historial.
+- T-AUTH: login/logout, credenciales inválidas, usuario inactivo, `401`/`403`, `auth/me` y protección de rutas web y API por rol.
 - T-CONC: 6 procesos en paralelo emiten 5 tickets cada uno; se verifican 30 números únicos y consecutivos contra MySQL real.
 - Flujo API completo: emisión → llamado → rellamado → inicio → finalización, más snapshot de pantalla y transferencia.
 - Ajustes: hora de cierre por defecto, cambio persistente, validación, comparación horaria y API de administración.
@@ -865,7 +972,9 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 - Scheduler: `tickets:no-show` cada minuto y `tickets:day:close` cada minuto, con ejecución efectiva cuando la hora local alcanza la hora configurada en `/admin/ajustes` (por defecto `16:30`). En local se ejecuta con `php artisan schedule:work`; en producción, con el cron de Laravel.
 - Cierre manual: `php artisan tickets:day:close --force`.
 - Tiempo real: `php artisan reverb:start` y `BROADCAST_CONNECTION=reverb`. Sin Reverb, la consola y la pantalla siguen funcionando por polling cada 5 segundos.
-- Operación local: ejecutar `php artisan db:seed` para crear ventanillas y el usuario de demostración `operador@demo.local` / `password` (solo con `APP_ENV=local`). En producción no se crea ese usuario.
+- Operación local: ejecutar `php artisan db:seed` para crear ventanillas, el perfil de prioridad y los usuarios de demostración `operador@demo.local` / `password` y `admin@demo.local` / `password` (solo con `APP_ENV=local`). En producción no se crean esos usuarios.
+- Acceso: `/login` para operadores, supervisores y administradores. La consola (`/consola`) requiere sesión y rol admin, supervisor u operador; `/admin/*` requiere rol admin. El quiosco (`/quiosco`) y la pantalla (`/pantalla`) son públicos.
+- Administración: `/admin/ajustes` (hora de cierre), `/admin/prioridades` (perfiles y ratios), `/admin/servicios` (catálogo y operadores autorizados) y `/admin/simulador` (secuencia de llamados). La API equivalente vive bajo `/api/v1/admin/*`.
 - La consola abre una sesión por operador y exige una ventanilla; el cambio de ventanilla queda en `station_assignments`.
 - La pantalla `/pantalla` se suscribe a todas las secciones activas y muestra el último llamado y los anteriores.
 - Redis: instalado en la arquitectura objetivo pero no habilitado; caché, colas y sesiones usan base de datos en local.
@@ -936,7 +1045,7 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 
 | Tema | Detalle | Fase aproximada |
 |---|---|---|
-| Transferencia (Q-11) | Resuelto en lo operativo en la Fase 3: la transfiere el operador que atiende, con motivo y operador de destino opcionales, y se conserva la prioridad original. Queda pendiente para la Fase 4 la autorización por rol y el recálculo de prioridad con el perfil de la sección destino. | Fase 4 (prioridades) |
+| Transferencia (Q-11) | Resuelto en lo operativo en la Fase 3: la transfiere el operador que atiende, con motivo y operador de destino opcionales, y se conserva la prioridad original. La Fase 4 añadió la autorización por rol; como el perfil de prioridad es global, no hay recálculo por sección destino. | Resuelto (Fases 3 y 4) |
 | Retención (Q-09) | ¿La auditoría append-only se conserva también 12 meses o tiene un plazo distinto? | Fase 5 (administración) |
 | Voz (Q-10) | Idioma, tipo de voz, volumen y si se usa TTS del sistema o un servicio externo. | Fase 5 (multimedia) |
 | Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados; la Fase 3 añadió reimpresión y registro de fallos, pero quedan reintentos/fallback y la autenticación del servicio local. | Fase 4/5 |
@@ -953,6 +1062,21 @@ Decisiones adoptadas al implementar la operación, coherentes con el acta:
 - **Reimpresión y fallos:** se registran como eventos `reprinted` y `print_failed`; no cambian el estado del ticket. El reintento queda a cargo del operador.
 - **Alcance sin autenticación:** la Fase 3 no añade login ni autorización. La consola y la administración siguen siendo de uso local hasta la Fase 4.
 
+### 15.6 Prioridades, servicios y autenticación (Fase 4, 2026-11-06)
+
+Decisiones adoptadas al implementar la Fase 4:
+
+- **Perfil global:** los perfiles de prioridad no tienen `section_id`; el mismo perfil aplica a las tres secciones. Esto simplifica la configuración y evita recalcular prioridad al transferir.
+- **Resolución del perfil:** se usa el primer perfil activo cuya vigencia cubra la fecha del llamado. Si no hay ninguno, se aplica el perfil fallback “Estándar 2:1” (2:1, aging 30 min, máximo 1 preferencial consecutivo) sin persistirlo.
+- **Ratio 2:1 con aging:** el selector calcula el objetivo de preferenciales con `intdiv((llamados + 1) * preferential_ratio, totalRatio)`. Un ticket del grupo más antiguo puede adelantarse si su espera alcanza `aging_minutes` y supera la del otro grupo. El límite de consecutivos actúa antes del aging.
+- **Snapshot:** cada llamado persiste ratios, llamados del día, grupo seleccionado, motivo (`ratio`, `only_general`, `only_preferential`, `aging_general`, `aging_preferential`, `max_consecutive_preferential`), espera y score. El score es la espera en minutos; los preferenciales suman 100000 para desempate.
+- **Servicios:** el catálogo es genérico y editable desde `/admin/servicios`. Un servicio pertenece a una sección, usa el código general de esa sección y añade su etiqueta al ticket (`A-001 · VIS`). Se valida por estado, días ISO, ventana horaria y vigencia.
+- **Autorización por servicio:** un operador solo puede llamar tickets de servicios para los que está autorizado. Los tickets sin servicio no requieren autorización. La autorización se administra por servicio desde la API de administración.
+- **Autenticación:** login propio por sesión, sin paquetes nuevos, con rate limiting. El usuario debe estar activo. Roles: administrador, supervisor y operador. La API usa la misma sesión y exige el token CSRF en las peticiones mutables.
+- **Protección de rutas:** quiosco y pantalla son públicos; la consola exige sesión y rol admin/supervisor/operador; la administración exige rol admin. La emisión de tickets y el snapshot de pantalla siguen siendo públicos porque los usan el quiosco y la pantalla.
+- **Política de tickets:** operar, transferir y reimprimir exigen una sesión activa en la sección actual del ticket. Un administrador conserva acceso total por `Gate::before`, pero las acciones de consola siguen requiriendo sesión de operador.
+- **Cierre de jornada:** sin cambios respecto de la Fase 3; las sesiones y asignaciones se cierran junto con los tickets.
+
 ---
 
 ## 16. Primeros pasos concretos
@@ -965,7 +1089,8 @@ Decisiones adoptadas al implementar la operación, coherentes con el acta:
 6. ~~Configurar la base de datos de pruebas en MySQL.~~ Completado: `gestion_tickets_test`.
 7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 71 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/admin/ajustes` y API.
 8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado, transferencia, reimpresión y fallo de impresión.
-9. Comenzar la Fase 4: prioridades configurable 2:1, aging, servicios exclusivos y autorización por servicio.
+9. ~~Implementar prioridades configurables 2:1, aging, servicios exclusivos, autorización por servicio y autenticación (Fase 4).~~ Completado el 2026-11-06: 127 pruebas en verde (T-PRIO, T-SVC y T-AUTH) y smoke test de `/login`, `/quiosco`, `/pantalla`, `/consola`, `/admin/ajustes`, prioridades, servicios y simulador.
+10. Comenzar la Fase 5: administración completa (secciones, ventanillas, operadores, impresoras y matriz), reportes, multimedia y anuncio por voz.
 
 ---
 
@@ -983,7 +1108,11 @@ Decisiones adoptadas al implementar la operación, coherentes con el acta:
 | `npm run build` no refleja cambios | Manifest de Vite desactualizado | Ejecutar `npm run build` o `npm run dev` |
 | El cierre no se ejecuta | Scheduler detenido o hora configurada posterior a la actual | Revisar `php artisan schedule:work` y la hora en `/admin/ajustes` |
 | El cierre se ejecutó antes de tiempo | Hora mal configurada o uso de `--force` | Corregir la hora; `--force` omite la comprobación horaria |
+| La API responde `419` | Falta el token CSRF de la sesión | Iniciar sesión en `/login` y enviar `X-XSRF-TOKEN` con la cookie `XSRF-TOKEN` |
+| La API responde `401` o `403` | Sesión ausente, usuario inactivo o rol insuficiente | Verificar `/login`, `is_active` y el rol del usuario |
+| No aparece el usuario de demostración | `APP_ENV` no es `local` | Ejecutar con `APP_ENV=local` o crear el usuario manualmente |
+| Un operador no recibe tickets de un servicio | No está autorizado para ese servicio | Asignarlo en `/admin/servicios` o en `service_user` |
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1, 2 y 3 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La consola y la administración todavía no tienen autenticación; deben usarse solo en local hasta la Fase 4. Cualquier avance debe reflejarse aquí y en el acta de decisiones.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06, con las Fases 1 a 4 completadas. Las pruebas de negocio se limitan a la suite automatizada y a un smoke test local; no se ha validado el sistema en operación real ni con impresoras físicas. La consola y la administración ya exigen autenticación; el quiosco y la pantalla siguen siendo públicos. Cualquier avance debe reflejarse aquí y en el acta de decisiones.

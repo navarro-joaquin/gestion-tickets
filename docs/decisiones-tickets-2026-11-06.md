@@ -66,4 +66,19 @@ Decisiones de implementación posteriores al addendum de cierre, coherentes con 
 - **Autenticación:** la Fase 3 no incorpora login ni autorización. La consola, las sesiones y la administración deben usarse solo en entorno local hasta la Fase 4.
 - **Responsable:** Alvaro Navarro.
 
+## Addendum — Prioridades, servicios y autenticación (Fase 4, 2026-11-06)
+
+Decisiones de implementación posteriores al addendum de la Fase 3, coherentes con el acta:
+
+- **Perfil de prioridad:** es global, sin sección. Aplica a las tres secciones y se resuelve por vigencia; si no hay perfil activo, se usa el fallback “Estándar 2:1”.
+- **Proporción de llamados:** configurable desde administración. Valor actual: **2 generales por cada 1 preferencial**.
+- **Aging:** un ticket que espera más de los minutos configurados (30 por defecto) puede adelantarse al otro grupo, siempre que su espera sea mayor.
+- **Preferenciales consecutivos:** se limita el número de llamados preferenciales seguidos (1 por defecto). El límite no deja la cola inactiva si ya no hay generales.
+- **Snapshot de prioridad:** cada llamado guarda ratios, llamados del día, grupo, motivo, espera y score en el ticket.
+- **Servicios exclusivos:** catálogo genérico administrable. Un servicio pertenece a una sección, usa el código general de esa sección y añade su etiqueta al ticket. Se valida por estado, días, horario y vigencia.
+- **Autorización por servicio:** un operador solo puede llamar tickets de los servicios para los que está autorizado. Los tickets sin servicio no requieren autorización.
+- **Autenticación:** login propio por sesión, con rate limiting y usuario activo. Roles: administrador, supervisor y operador.
+- **Protección de rutas:** quiosco y pantalla son públicos; la consola exige sesión y rol operativo; la administración exige rol administrador. La API de emisión y el snapshot de pantalla siguen siendo públicos.
+- **Responsable:** Alvaro Navarro.
+
 _Generado desde docs/formulario-decisiones.html el 2026-11-06T16:17:32.435Z._

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Domain\Operations\Station;
 use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\IssueTicket;
+use App\Models\User;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
@@ -67,9 +69,19 @@ class TicketApiTest extends TestCase
             'category' => 'general',
         ])->json('data');
 
+        $operator = User::factory()->create();
+        $station = $this->station('plataforma');
+
+        $this->actingAs($operator);
+
+        $this->postJson('/api/v1/console/session', [
+            'section' => 'plataforma',
+            'station_id' => $station->id,
+        ])->assertCreated();
+
         $this->postJson('/api/v1/console/tickets/next', [
             'section' => 'plataforma',
-            'station' => 'Ventanilla 1',
+            'station' => $station->name,
         ])
             ->assertOk()
             ->assertJsonPath('data.id', $issued['id'])
@@ -96,7 +108,8 @@ class TicketApiTest extends TestCase
         $issue->handle('plataforma', 'general');
         $issue->handle('plataforma', 'pregnancy');
 
-        $this->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201')
+        $this->actingAs(User::factory()->create())
+            ->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201')
             ->assertOk()
             ->assertJsonPath('data.waiting_count', 2)
             ->assertJsonPath('data.active_ticket', null);
@@ -113,9 +126,19 @@ class TicketApiTest extends TestCase
     {
         $this->seedMatrix();
 
+        $operator = User::factory()->create();
+        $station = $this->station('plataforma');
+
+        $this->actingAs($operator);
+
+        $this->postJson('/api/v1/console/session', [
+            'section' => 'plataforma',
+            'station_id' => $station->id,
+        ])->assertCreated();
+
         $this->postJson('/api/v1/console/tickets/next', [
             'section' => 'plataforma',
-            'station' => 'Ventanilla 1',
+            'station' => $station->name,
         ])
             ->assertOk()
             ->assertJsonPath('data', null)
@@ -139,5 +162,13 @@ class TicketApiTest extends TestCase
             ->assertJsonPath('data.0.waiting_count', 1)
             ->assertJsonPath('data.0.calling.0.label', 'A-001')
             ->assertJsonPath('data.0.calling.0.status', 'called');
+    }
+
+    private function station(string $sectionSlug): Station
+    {
+        return Station::query()
+            ->where('section_id', $this->section($sectionSlug)->id)
+            ->orderBy('sort_order')
+            ->firstOrFail();
     }
 }

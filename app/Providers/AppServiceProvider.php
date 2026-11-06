@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Domain\Ticketing\Ticket;
 use App\Domain\Users\UserRole;
 use App\Models\User;
+use App\Policies\TicketPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -30,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
                 $request->user()?->getAuthIdentifier() ?: $request->ip(),
             );
         });
+
+        Gate::policy(Ticket::class, TicketPolicy::class);
 
         Gate::before(function (User $user, string $ability): ?bool {
             return $user->is_active && $user->role === UserRole::Admin

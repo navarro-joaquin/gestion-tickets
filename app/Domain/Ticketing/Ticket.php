@@ -2,9 +2,11 @@
 
 namespace App\Domain\Ticketing;
 
+use App\Domain\Priorities\PriorityProfile;
 use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use App\Domain\Sections\SectionTicketCode;
+use App\Domain\Services\Service;
 use App\Models\User;
 use Database\Factories\Domain\Ticketing\TicketFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -20,7 +22,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'section_id',
     'current_section_id',
     'section_ticket_code_id',
+    'service_id',
     'category_id',
+    'service_label',
+    'is_preferential',
+    'priority_profile_id',
+    'priority_score',
+    'priority_snapshot',
     'code',
     'period_key',
     'number',
@@ -55,6 +63,9 @@ class Ticket extends Model
             'period_key' => 'date',
             'number' => 'integer',
             'status' => TicketStatus::class,
+            'is_preferential' => 'boolean',
+            'priority_score' => 'integer',
+            'priority_snapshot' => 'array',
             'call_count' => 'integer',
             'issued_at' => 'datetime',
             'called_at' => 'datetime',
@@ -94,6 +105,22 @@ class Ticket extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @return BelongsTo<Service, $this>
+     */
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
+    }
+
+    /**
+     * @return BelongsTo<PriorityProfile, $this>
+     */
+    public function priorityProfile(): BelongsTo
+    {
+        return $this->belongsTo(PriorityProfile::class);
     }
 
     /**
@@ -175,7 +202,8 @@ class Ticket extends Model
     protected function label(): Attribute
     {
         return Attribute::get(
-            fn (): string => $this->code.'-'.$this->display_number,
+            fn (): string => $this->code.'-'.$this->display_number
+                .($this->service_label ? ' · '.$this->service_label : ''),
         );
     }
 }

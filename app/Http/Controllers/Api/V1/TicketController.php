@@ -19,6 +19,7 @@ class TicketController extends Controller
         $ticket = $issueTicket->handle(
             $request->validated('section'),
             $request->validated('category'),
+            $request->validated('service'),
         );
 
         return response()->json([

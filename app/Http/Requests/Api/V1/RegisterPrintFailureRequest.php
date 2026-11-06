@@ -18,7 +18,6 @@ class RegisterPrintFailureRequest extends FormRequest
     {
         return [
             'message' => ['nullable', 'string', 'max:500'],
-            'operator_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
     }
 }

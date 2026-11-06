@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             CategorySeeder::class,
             SectionSeeder::class,
             StationSeeder::class,
+            PriorityProfileSeeder::class,
         ]);
 
         if (app()->environment('local')) {

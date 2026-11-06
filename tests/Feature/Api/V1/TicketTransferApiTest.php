@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Domain\Operations\Station;
 use App\Domain\Ticketing\Actions\IssueTicket;
+use App\Models\User;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
@@ -20,6 +22,8 @@ class TicketTransferApiTest extends TestCase
             'section' => 'plataforma',
             'category' => 'general',
         ])->json('data');
+
+        $this->openSession('plataforma');
 
         $this->postJson("/api/v1/console/tickets/{$issued['id']}/transfer", [
             'section' => 'odeco',
@@ -47,6 +51,8 @@ class TicketTransferApiTest extends TestCase
         $first = $issue->handle('plataforma', 'general');
         $issue->handle('plataforma', 'general');
 
+        $this->openSession('plataforma');
+
         $this->postJson("/api/v1/console/tickets/{$first->id}/transfer", [
             'section' => 'odeco',
         ])->assertOk();
@@ -64,6 +70,8 @@ class TicketTransferApiTest extends TestCase
         $this->seedMatrix();
 
         $ticket = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->openSession('plataforma');
 
         $response = $this->postJson("/api/v1/console/tickets/{$ticket->id}/reprint")
             ->assertOk()
@@ -85,6 +93,8 @@ class TicketTransferApiTest extends TestCase
 
         $ticket = app(IssueTicket::class)->handle('plataforma', 'general');
 
+        $this->openSession('plataforma');
+
         $this->postJson("/api/v1/console/tickets/{$ticket->id}/print-failed", [
             'message' => 'La impresora no responde',
         ])
@@ -97,5 +107,23 @@ class TicketTransferApiTest extends TestCase
             'type' => 'print_failed',
         ]);
         $this->assertSame('waiting', $ticket->fresh()->status->value);
+    }
+
+    private function openSession(string $sectionSlug): User
+    {
+        $operator = User::factory()->create();
+        $station = Station::query()
+            ->where('section_id', $this->section($sectionSlug)->id)
+            ->orderBy('sort_order')
+            ->firstOrFail();
+
+        $this->actingAs($operator);
+
+        $this->postJson('/api/v1/console/session', [
+            'section' => $sectionSlug,
+            'station_id' => $station->id,
+        ])->assertCreated();
+
+        return $operator;
     }
 }

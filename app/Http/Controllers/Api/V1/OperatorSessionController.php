@@ -50,13 +50,14 @@ class OperatorSessionController extends Controller
     }
 
     public function store(
-        OpenOperatorSessionRequest $request,
+        Request $request,
+        OpenOperatorSessionRequest $sessionRequest,
         OpenOperatorSession $action,
     ): JsonResponse {
         $session = $action->handle(
-            (int) $request->validated('operator_id'),
-            $request->validated('section'),
-            (int) $request->validated('station_id'),
+            $request->user()->id,
+            $sessionRequest->validated('section'),
+            (int) $sessionRequest->validated('station_id'),
         );
 
         return response()->json([
@@ -65,8 +66,10 @@ class OperatorSessionController extends Controller
         ], 201);
     }
 
-    public function show(OperatorSession $session): JsonResponse
+    public function show(Request $request, OperatorSession $session): JsonResponse
     {
+        $this->ensureOwnership($request, $session);
+
         $session->load(['operator', 'section', 'activeAssignment.station', 'assignments.station']);
 
         return response()->json([
@@ -75,9 +78,12 @@ class OperatorSessionController extends Controller
     }
 
     public function close(
+        Request $request,
         OperatorSession $session,
         CloseOperatorSession $action,
     ): JsonResponse {
+        $this->ensureOwnership($request, $session);
+
         $session = $action->handle($session);
 
         return response()->json([
@@ -87,15 +93,29 @@ class OperatorSessionController extends Controller
     }
 
     public function changeStation(
-        ChangeOperatorStationRequest $request,
+        Request $request,
+        ChangeOperatorStationRequest $stationRequest,
         OperatorSession $session,
         ChangeOperatorStation $action,
     ): JsonResponse {
-        $session = $action->handle($session, (int) $request->validated('station_id'));
+        $this->ensureOwnership($request, $session);
+
+        $session = $action->handle($session, (int) $stationRequest->validated('station_id'));
 
         return response()->json([
             'data' => new OperatorSessionResource($session),
             'message' => 'Ventanilla actualizada.',
         ]);
+    }
+
+    private function ensureOwnership(Request $request, OperatorSession $session): void
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $session->operator_id === $user->id || $user->role === UserRole::Admin,
+            403,
+            'No puede operar una sesión de otro usuario.',
+        );
     }
 }

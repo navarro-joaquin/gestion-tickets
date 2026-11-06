@@ -1,10 +1,76 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { api } from '../../shared/api/client';
-import type { AdminSettings } from '../../shared/types/api';
+import { api, type PriorityProfilePayload, type ServicePayload } from '../../shared/api/client';
+import type {
+    AdminSettings,
+    AuthUser,
+    Operator,
+    PriorityProfile,
+    Section,
+    Service,
+    SimulatedQueue,
+} from '../../shared/types/api';
+
+type Tab = 'settings' | 'priorities' | 'services' | 'simulator';
+
+interface ProfileForm {
+    name: string;
+    description: string;
+    general_ratio: number;
+    preferential_ratio: number;
+    aging_minutes: number;
+    max_consecutive_preferential: number;
+    is_active: boolean;
+    effective_from: string;
+    effective_to: string;
+}
+
+interface ServiceForm {
+    section: string;
+    slug: string;
+    name: string;
+    label: string;
+    description: string;
+    is_active: boolean;
+    available_days: number[];
+    available_from: string;
+    available_to: string;
+    effective_from: string;
+    effective_to: string;
+    sort_order: number;
+    operator_ids: number[];
+}
+
+const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'settings', label: 'Ajustes' },
+    { id: 'priorities', label: 'Prioridades' },
+    { id: 'services', label: 'Servicios' },
+    { id: 'simulator', label: 'Simulador' },
+];
+
+const activeTab = ref<Tab>('settings');
+const currentUser = ref<AuthUser | null>(null);
 
 const settings = ref<AdminSettings | null>(null);
 const closingTime = ref('16:30');
+
+const profiles = ref<PriorityProfile[]>([]);
+const editingProfileId = ref<number | null>(null);
+const profileForm = ref<ProfileForm>(emptyProfileForm());
+
+const services = ref<Service[]>([]);
+const sections = ref<Section[]>([]);
+const adminOperators = ref<Operator[]>([]);
+const editingServiceId = ref<number | null>(null);
+const serviceForm = ref<ServiceForm>(emptyServiceForm());
+
+const simulatorForm = ref({
+    general_count: 6,
+    preferential_count: 3,
+    profile_id: null as number | null,
+});
+const simulation = ref<SimulatedQueue | null>(null);
+
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
@@ -14,28 +80,98 @@ const nextClosingLabel = computed<string>(() => {
         return '';
     }
 
-    const date = new Date(settings.value.next_closing_at);
-
     return new Intl.DateTimeFormat('es-BO', {
         dateStyle: 'full',
         timeStyle: 'short',
-    }).format(date);
+    }).format(new Date(settings.value.next_closing_at));
 });
 
-onMounted(loadSettings);
+const dayLabels: Array<{ value: number; label: string }> = [
+    { value: 1, label: 'Lun' },
+    { value: 2, label: 'Mar' },
+    { value: 3, label: 'Mié' },
+    { value: 4, label: 'Jue' },
+    { value: 5, label: 'Vie' },
+    { value: 6, label: 'Sáb' },
+    { value: 7, label: 'Dom' },
+];
+
+onMounted(async () => {
+    await loadCurrentUser();
+
+    if (!currentUser.value) {
+        return;
+    }
+
+    await Promise.all([
+        loadSettings(),
+        loadProfiles(),
+        loadServices(),
+        loadSections(),
+        loadAdminOperators(),
+    ]);
+});
+
+async function loadCurrentUser(): Promise<void> {
+    try {
+        const response = await api.me();
+        currentUser.value = response.data;
+    } catch (exception) {
+        handleUnauthorized(exception);
+    }
+}
 
 async function loadSettings(): Promise<void> {
     try {
         const response = await api.adminSettings();
         settings.value = response.data;
         closingTime.value = response.data.closing_time;
-        error.value = '';
     } catch (exception) {
         error.value = describeError(exception);
     }
 }
 
-async function save(): Promise<void> {
+async function loadProfiles(): Promise<void> {
+    try {
+        const response = await api.priorityProfiles();
+        profiles.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function loadServices(): Promise<void> {
+    try {
+        const response = await api.services();
+        services.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function loadSections(): Promise<void> {
+    try {
+        const response = await api.sections();
+        sections.value = response.data;
+
+        if (!serviceForm.value.section && sections.value.length > 0) {
+            serviceForm.value.section = sections.value[0].slug;
+        }
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function loadAdminOperators(): Promise<void> {
+    try {
+        const response = await api.adminOperators();
+        adminOperators.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function saveSettings(): Promise<void> {
     if (busy.value) {
         return;
     }
@@ -56,6 +192,257 @@ async function save(): Promise<void> {
     }
 }
 
+function editProfile(profile: PriorityProfile): void {
+    editingProfileId.value = profile.id;
+    profileForm.value = {
+        name: profile.name,
+        description: profile.description ?? '',
+        general_ratio: profile.general_ratio,
+        preferential_ratio: profile.preferential_ratio,
+        aging_minutes: profile.aging_minutes,
+        max_consecutive_preferential: profile.max_consecutive_preferential,
+        is_active: profile.is_active,
+        effective_from: profile.effective_from ?? '',
+        effective_to: profile.effective_to ?? '',
+    };
+    activeTab.value = 'priorities';
+}
+
+function resetProfileForm(): void {
+    editingProfileId.value = null;
+    profileForm.value = emptyProfileForm();
+}
+
+async function saveProfile(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    const payload: PriorityProfilePayload = {
+        name: profileForm.value.name,
+        description: nullable(profileForm.value.description),
+        general_ratio: Number(profileForm.value.general_ratio),
+        preferential_ratio: Number(profileForm.value.preferential_ratio),
+        aging_minutes: Number(profileForm.value.aging_minutes),
+        max_consecutive_preferential: Number(profileForm.value.max_consecutive_preferential),
+        is_active: profileForm.value.is_active,
+        effective_from: nullable(profileForm.value.effective_from),
+        effective_to: nullable(profileForm.value.effective_to),
+    };
+
+    try {
+        const response = editingProfileId.value
+            ? await api.updatePriorityProfile(editingProfileId.value, payload)
+            : await api.createPriorityProfile(payload);
+
+        message.value = response.message;
+        resetProfileForm();
+        await loadProfiles();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function removeProfile(profile: PriorityProfile): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    try {
+        const response = await api.deletePriorityProfile(profile.id);
+        message.value = response.message;
+        await loadProfiles();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+function editService(service: Service): void {
+    editingServiceId.value = service.id;
+    serviceForm.value = {
+        section: service.section?.slug ?? sections.value[0]?.slug ?? '',
+        slug: service.slug,
+        name: service.name,
+        label: service.label,
+        description: service.description ?? '',
+        is_active: service.is_active,
+        available_days: service.available_days ?? [],
+        available_from: (service.available_from ?? '').slice(0, 5),
+        available_to: (service.available_to ?? '').slice(0, 5),
+        effective_from: service.effective_from ?? '',
+        effective_to: service.effective_to ?? '',
+        sort_order: service.sort_order,
+        operator_ids: (service.operators ?? []).map((operator) => operator.id),
+    };
+    activeTab.value = 'services';
+}
+
+function resetServiceForm(): void {
+    editingServiceId.value = null;
+    serviceForm.value = emptyServiceForm(sections.value[0]?.slug ?? '');
+}
+
+function toggleDay(day: number): void {
+    const days = serviceForm.value.available_days;
+
+    serviceForm.value.available_days = days.includes(day)
+        ? days.filter((value) => value !== day)
+        : [...days, day].sort((left, right) => left - right);
+}
+
+async function saveService(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    const payload: ServicePayload = {
+        section: serviceForm.value.section,
+        slug: serviceForm.value.slug,
+        name: serviceForm.value.name,
+        label: serviceForm.value.label,
+        description: nullable(serviceForm.value.description),
+        is_active: serviceForm.value.is_active,
+        available_days: serviceForm.value.available_days.length > 0
+            ? serviceForm.value.available_days
+            : null,
+        available_from: nullable(serviceForm.value.available_from),
+        available_to: nullable(serviceForm.value.available_to),
+        effective_from: nullable(serviceForm.value.effective_from),
+        effective_to: nullable(serviceForm.value.effective_to),
+        sort_order: Number(serviceForm.value.sort_order),
+        operator_ids: serviceForm.value.operator_ids,
+    };
+
+    try {
+        const response = editingServiceId.value
+            ? await api.updateService(editingServiceId.value, payload)
+            : await api.createService(payload);
+
+        message.value = response.message;
+        resetServiceForm();
+        await loadServices();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function removeService(service: Service): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    try {
+        const response = await api.deleteService(service.id);
+        message.value = response.message;
+        await loadServices();
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function runSimulation(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    busy.value = true;
+    message.value = '';
+    error.value = '';
+
+    try {
+        const response = await api.simulateQueue(
+            Number(simulatorForm.value.general_count),
+            Number(simulatorForm.value.preferential_count),
+            simulatorForm.value.profile_id,
+        );
+
+        simulation.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function logout(): Promise<void> {
+    try {
+        await api.logout();
+    } catch {
+        // La redirección es suficiente.
+    }
+
+    window.location.href = '/login';
+}
+
+function emptyProfileForm(): ProfileForm {
+    return {
+        name: '',
+        description: '',
+        general_ratio: 2,
+        preferential_ratio: 1,
+        aging_minutes: 30,
+        max_consecutive_preferential: 1,
+        is_active: true,
+        effective_from: '',
+        effective_to: '',
+    };
+}
+
+function emptyServiceForm(section = ''): ServiceForm {
+    return {
+        section,
+        slug: '',
+        name: '',
+        label: '',
+        description: '',
+        is_active: true,
+        available_days: [],
+        available_from: '',
+        available_to: '',
+        effective_from: '',
+        effective_to: '',
+        sort_order: 0,
+        operator_ids: [],
+    };
+}
+
+function nullable(value: string): string | null {
+    return value.trim() === '' ? null : value.trim();
+}
+
+function handleUnauthorized(exception: unknown): void {
+    if (exception instanceof Error && 'status' in exception && exception.status === 401) {
+        window.location.href = '/login';
+        return;
+    }
+
+    error.value = describeError(exception);
+}
+
 function describeError(exception: unknown): string {
     return exception instanceof Error ? exception.message : 'Ocurrió un error inesperado.';
 }
@@ -63,16 +450,52 @@ function describeError(exception: unknown): string {
 
 <template>
     <main class="min-h-screen bg-slate-950 px-6 py-10 text-white">
-        <div class="mx-auto max-w-3xl">
-            <header class="border-b border-slate-800 pb-6">
-                <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Gestión de tickets</p>
-                <h1 class="text-3xl font-semibold">Administración · Ajustes</h1>
-                <p class="mt-2 text-slate-400">
-                    Configuración global de la operación.
-                </p>
+        <div class="mx-auto max-w-6xl">
+            <header class="flex flex-wrap items-end justify-between gap-6 border-b border-slate-800 pb-6">
+                <div>
+                    <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Gestión de tickets</p>
+                    <h1 class="text-3xl font-semibold">Administración</h1>
+                    <p class="mt-2 text-slate-400">Configuración global, prioridades y servicios.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <div v-if="currentUser" class="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-2">
+                        <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Usuario</p>
+                        <p class="text-sm font-medium text-slate-100">{{ currentUser.name }} · {{ currentUser.role_label }}</p>
+                    </div>
+                    <button
+                        type="button"
+                        class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-red-400 hover:text-red-200"
+                        @click="logout"
+                    >
+                        Salir
+                    </button>
+                </div>
             </header>
 
-            <section class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
+            <nav class="mt-6 flex flex-wrap gap-2">
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.id"
+                    type="button"
+                    class="rounded-xl px-4 py-2 text-sm font-semibold transition"
+                    :class="activeTab === tab.id
+                        ? 'bg-sky-500 text-slate-950'
+                        : 'border border-slate-800 text-slate-300 hover:border-sky-500'"
+                    @click="activeTab = tab.id"
+                >
+                    {{ tab.label }}
+                </button>
+            </nav>
+
+            <p v-if="message" class="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200">
+                {{ message }}
+            </p>
+            <p v-if="error" class="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">
+                {{ error }}
+            </p>
+
+            <section v-if="activeTab === 'settings'" class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
                 <h2 class="text-xl font-semibold">Cierre de jornada</h2>
                 <p class="mt-2 text-sm text-slate-400">
                     A esta hora se expiran los tickets en espera, se marcan como no presentados
@@ -94,7 +517,7 @@ function describeError(exception: unknown): string {
                         type="button"
                         class="rounded-xl bg-sky-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="busy"
-                        @click="save"
+                        @click="saveSettings"
                     >
                         {{ busy ? 'Guardando…' : 'Guardar' }}
                     </button>
@@ -110,19 +533,277 @@ function describeError(exception: unknown): string {
                         <dd class="mt-1 text-slate-200">{{ nextClosingLabel || '—' }}</dd>
                     </div>
                 </dl>
-
-                <p v-if="message" class="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200">
-                    {{ message }}
-                </p>
-                <p v-if="error" class="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">
-                    {{ error }}
-                </p>
             </section>
 
-            <p class="mt-6 text-sm text-slate-500">
-                La autenticación y los permisos de administración se habilitan en la Fase 4.
-                Mientras tanto, este ajuste debe usarse solo en el entorno local.
-            </p>
+            <section v-else-if="activeTab === 'priorities'" class="mt-8 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+                <form class="rounded-3xl border border-slate-800 bg-slate-900 p-8" @submit.prevent="saveProfile">
+                    <h2 class="text-xl font-semibold">
+                        {{ editingProfileId ? 'Editar perfil' : 'Nuevo perfil' }}
+                    </h2>
+                    <p class="mt-2 text-sm text-slate-400">
+                        La proporción indica cuántos tickets generales se llaman por cada preferencial.
+                    </p>
+
+                    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                        <label class="flex flex-col gap-2 text-sm text-slate-300 sm:col-span-2">
+                            Nombre
+                            <input v-model="profileForm.name" required maxlength="80" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300 sm:col-span-2">
+                            Descripción
+                            <input v-model="profileForm.description" maxlength="255" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Ratio general
+                            <input v-model.number="profileForm.general_ratio" type="number" min="1" max="20" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Ratio preferencial
+                            <input v-model.number="profileForm.preferential_ratio" type="number" min="0" max="20" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Aging (minutos)
+                            <input v-model.number="profileForm.aging_minutes" type="number" min="0" max="1440" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Máx. preferenciales seguidos
+                            <input v-model.number="profileForm.max_consecutive_preferential" type="number" min="1" max="20" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Vigente desde
+                            <input v-model="profileForm.effective_from" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Vigente hasta
+                            <input v-model="profileForm.effective_to" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                    </div>
+
+                    <label class="mt-4 flex items-center gap-3 text-sm text-slate-300">
+                        <input v-model="profileForm.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-700 bg-slate-950">
+                        Perfil activo
+                    </label>
+
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button type="submit" class="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" :disabled="busy">
+                            {{ editingProfileId ? 'Guardar cambios' : 'Crear perfil' }}
+                        </button>
+                        <button v-if="editingProfileId" type="button" class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300" @click="resetProfileForm">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+
+                <div class="space-y-4">
+                    <article v-for="profile in profiles" :key="profile.id" class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold">{{ profile.name }}</h3>
+                                <p class="text-sm text-slate-400">{{ profile.description || 'Sin descripción' }}</p>
+                            </div>
+                            <span
+                                class="rounded-full px-3 py-1 text-xs font-semibold"
+                                :class="profile.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                            >
+                                {{ profile.is_active ? 'Activo' : 'Inactivo' }}
+                            </span>
+                        </div>
+                        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                            <div><dt class="text-slate-500">General</dt><dd class="text-slate-200">{{ profile.general_ratio }}</dd></div>
+                            <div><dt class="text-slate-500">Preferencial</dt><dd class="text-slate-200">{{ profile.preferential_ratio }}</dd></div>
+                            <div><dt class="text-slate-500">Aging</dt><dd class="text-slate-200">{{ profile.aging_minutes }} min</dd></div>
+                            <div><dt class="text-slate-500">Máx. seguidos</dt><dd class="text-slate-200">{{ profile.max_consecutive_preferential }}</dd></div>
+                        </dl>
+                        <div class="mt-4 flex gap-2">
+                            <button type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-sky-500" @click="editProfile(profile)">
+                                Editar
+                            </button>
+                            <button type="button" class="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-200 hover:border-red-400" @click="removeProfile(profile)">
+                                Eliminar
+                            </button>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section v-else-if="activeTab === 'services'" class="mt-8 space-y-6">
+                <form class="rounded-3xl border border-slate-800 bg-slate-900 p-8" @submit.prevent="saveService">
+                    <h2 class="text-xl font-semibold">{{ editingServiceId ? 'Editar servicio' : 'Nuevo servicio' }}</h2>
+                    <p class="mt-2 text-sm text-slate-400">
+                        El servicio usa el código general de la sección y añade su etiqueta al número.
+                    </p>
+
+                    <div class="mt-6 grid gap-4 md:grid-cols-2">
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Sección
+                            <select v-model="serviceForm.section" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                                <option v-for="section in sections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Slug
+                            <input v-model="serviceForm.slug" required maxlength="80" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Nombre
+                            <input v-model="serviceForm.name" required maxlength="120" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Etiqueta del ticket
+                            <input v-model="serviceForm.label" required maxlength="20" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300 md:col-span-2">
+                            Descripción
+                            <input v-model="serviceForm.description" maxlength="255" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Disponible desde
+                            <input v-model="serviceForm.available_from" type="time" step="60" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Disponible hasta
+                            <input v-model="serviceForm.available_to" type="time" step="60" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Vigente desde
+                            <input v-model="serviceForm.effective_from" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Vigente hasta
+                            <input v-model="serviceForm.effective_to" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-300">
+                            Orden
+                            <input v-model.number="serviceForm.sort_order" type="number" min="0" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        </label>
+                    </div>
+
+                    <div class="mt-4">
+                        <p class="text-sm text-slate-300">Días de atención</p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <button
+                                v-for="day in dayLabels"
+                                :key="day.value"
+                                type="button"
+                                class="rounded-lg px-3 py-2 text-sm font-semibold"
+                                :class="serviceForm.available_days.includes(day.value)
+                                    ? 'bg-emerald-500 text-slate-950'
+                                    : 'border border-slate-700 text-slate-300'"
+                                @click="toggleDay(day.value)"
+                            >
+                                {{ day.label }}
+                            </button>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-500">Sin días seleccionados: disponible todos los días.</p>
+                    </div>
+
+                    <div class="mt-4">
+                        <p class="text-sm text-slate-300">Operadores autorizados</p>
+                        <div class="mt-2 flex flex-wrap gap-3">
+                            <label v-for="operator in adminOperators" :key="operator.id" class="flex items-center gap-2 rounded-lg border border-slate-800 px-3 py-2 text-sm text-slate-300">
+                                <input v-model="serviceForm.operator_ids" type="checkbox" :value="operator.id" class="h-4 w-4 rounded border-slate-700 bg-slate-950">
+                                {{ operator.name }}
+                            </label>
+                        </div>
+                        <p v-if="adminOperators.length === 0" class="mt-2 text-xs text-slate-500">No hay operadores activos.</p>
+                    </div>
+
+                    <label class="mt-4 flex items-center gap-3 text-sm text-slate-300">
+                        <input v-model="serviceForm.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-700 bg-slate-950">
+                        Servicio activo
+                    </label>
+
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button type="submit" class="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" :disabled="busy">
+                            {{ editingServiceId ? 'Guardar cambios' : 'Crear servicio' }}
+                        </button>
+                        <button v-if="editingServiceId" type="button" class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300" @click="resetServiceForm">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <article v-for="service in services" :key="service.id" class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold">{{ service.name }}</h3>
+                                <p class="text-sm text-slate-400">{{ service.section?.name }} · {{ service.label }}</p>
+                            </div>
+                            <span
+                                class="rounded-full px-3 py-1 text-xs font-semibold"
+                                :class="service.is_available_now ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                            >
+                                {{ service.is_available_now ? 'Disponible ahora' : 'Fuera de ventana' }}
+                            </span>
+                        </div>
+                        <p class="mt-3 text-sm text-slate-400">
+                            {{ service.available_from || '—' }} a {{ service.available_to || '—' }}
+                            · {{ (service.available_days ?? []).length > 0 ? (service.available_days ?? []).join(', ') : 'todos los días' }}
+                        </p>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Operadores: {{ (service.operators ?? []).map((operator) => operator.name).join(', ') || 'sin restricción' }}
+                        </p>
+                        <div class="mt-4 flex gap-2">
+                            <button type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-sky-500" @click="editService(service)">
+                                Editar
+                            </button>
+                            <button type="button" class="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-200 hover:border-red-400" @click="removeService(service)">
+                                Eliminar
+                            </button>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section v-else class="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-8">
+                <h2 class="text-xl font-semibold">Simulador de cola</h2>
+                <p class="mt-2 text-sm text-slate-400">
+                    Calcula la secuencia de llamados con la proporción y el límite de preferenciales consecutivos.
+                </p>
+
+                <div class="mt-6 grid gap-4 sm:grid-cols-3">
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Tickets generales
+                        <input v-model.number="simulatorForm.general_count" type="number" min="0" max="200" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Tickets preferenciales
+                        <input v-model.number="simulatorForm.preferential_count" type="number" min="0" max="200" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Perfil
+                        <select v-model="simulatorForm.profile_id" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                            <option :value="null">Perfil vigente</option>
+                            <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button type="button" class="mt-6 rounded-xl bg-sky-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" :disabled="busy" @click="runSimulation">
+                    Simular
+                </button>
+
+                <div v-if="simulation" class="mt-8">
+                    <p class="text-sm text-slate-400">
+                        Perfil <span class="text-slate-200">{{ simulation.profile.name }}</span> ·
+                        {{ simulation.totals.general }} generales · {{ simulation.totals.preferential }} preferenciales
+                    </p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <span
+                            v-for="step in simulation.sequence"
+                            :key="step.position"
+                            class="rounded-xl px-3 py-2 text-sm font-semibold"
+                            :class="step.group === 'preferential'
+                                ? 'bg-fuchsia-500/20 text-fuchsia-200'
+                                : 'bg-sky-500/20 text-sky-200'"
+                            :title="step.reason"
+                        >
+                            {{ step.position }}. {{ step.group === 'preferential' ? 'P' : 'G' }}
+                        </span>
+                    </div>
+                </div>
+            </section>
         </div>
     </main>
 </template>

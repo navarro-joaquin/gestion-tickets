@@ -3,6 +3,7 @@
 namespace App\Domain\Sections;
 
 use App\Domain\Operations\Station;
+use App\Domain\Services\Service;
 use Database\Factories\Domain\Sections\SectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -50,6 +51,16 @@ class Section extends Model
     public function stations(): HasMany
     {
         return $this->hasMany(Station::class)
+            ->orderBy('sort_order')
+            ->orderBy('name');
+    }
+
+    /**
+     * @return HasMany<Service, $this>
+     */
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class)
             ->orderBy('sort_order')
             ->orderBy('name');
     }

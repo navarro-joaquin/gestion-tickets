@@ -27,6 +27,10 @@ class TicketResource extends JsonResource
             'is_transferred' => ($this->current_section_id ?? $this->section_id) !== $this->section_id,
             'station_label' => $this->station_label,
             'call_count' => $this->call_count,
+            'is_preferential' => (bool) $this->is_preferential,
+            'service_label' => $this->service_label,
+            'priority_score' => (int) $this->priority_score,
+            'priority_snapshot' => $this->priority_snapshot,
             'issued_at' => $this->issued_at?->toIso8601String(),
             'called_at' => $this->called_at?->toIso8601String(),
             'started_at' => $this->started_at?->toIso8601String(),
@@ -57,6 +61,15 @@ class TicketResource extends JsonResource
                     'name' => $this->category->name,
                     'is_preferential' => $this->category->is_preferential,
                 ],
+            ),
+            'service' => $this->whenLoaded(
+                'service',
+                fn (): ?array => $this->service ? [
+                    'id' => $this->service->id,
+                    'slug' => $this->service->slug,
+                    'name' => $this->service->name,
+                    'label' => $this->service->label,
+                ] : null,
             ),
         ];
     }

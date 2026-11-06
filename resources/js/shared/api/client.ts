@@ -1,12 +1,16 @@
 import type {
     AdminSettings,
+    AuthUser,
     ConsoleQueue,
     DisplaySnapshot,
     IssuedTicketResponse,
     Operator,
     OperatorSession,
     PrintPayload,
+    PriorityProfile,
     Section,
+    Service,
+    SimulatedQueue,
     Station,
     Ticket,
 } from '../types/api';
@@ -21,12 +25,22 @@ export class ApiError extends Error {
     }
 }
 
+function csrfToken(): string | null {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const token = csrfToken();
+
     const response = await fetch(`/api/v1${path}`, {
         ...init,
+        credentials: 'same-origin',
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...(token ? { 'X-XSRF-TOKEN': token } : {}),
             ...(init.headers ?? {}),
         },
     });
@@ -45,14 +59,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+    me(): Promise<{ data: AuthUser }> {
+        return request('/auth/me');
+    },
+
+    logout(): Promise<{ message: string }> {
+        return request('/auth/logout', { method: 'POST' });
+    },
+
     sections(): Promise<{ data: Section[] }> {
         return request('/sections');
     },
 
-    issue(section: string, category: string): Promise<IssuedTicketResponse> {
+    issue(section: string, category?: string, service?: string): Promise<IssuedTicketResponse> {
         return request('/tickets', {
             method: 'POST',
-            body: JSON.stringify({ section, category }),
+            body: JSON.stringify({ section, category, service }),
         });
     },
 
@@ -64,32 +86,20 @@ export const api = {
         return request(`/console/stations?section=${encodeURIComponent(section)}`);
     },
 
-    queue(
-        section: string,
-        station: string,
-        operatorId?: number | null,
-    ): Promise<{ data: ConsoleQueue }> {
-        const params = new URLSearchParams({ section, station });
+    queue(section: string, station?: string): Promise<{ data: ConsoleQueue }> {
+        const params = new URLSearchParams({ section });
 
-        if (operatorId) {
-            params.set('operator_id', String(operatorId));
+        if (station) {
+            params.set('station', station);
         }
 
         return request(`/console/queue?${params.toString()}`);
     },
 
-    openSession(
-        operatorId: number,
-        section: string,
-        stationId: number,
-    ): Promise<{ data: OperatorSession; message: string }> {
+    openSession(section: string, stationId: number): Promise<{ data: OperatorSession; message: string }> {
         return request('/console/session', {
             method: 'POST',
-            body: JSON.stringify({
-                operator_id: operatorId,
-                section,
-                station_id: stationId,
-            }),
+            body: JSON.stringify({ section, station_id: stationId }),
         });
     },
 
@@ -111,18 +121,10 @@ export const api = {
         });
     },
 
-    next(
-        section: string,
-        station: string,
-        operatorId?: number | null,
-    ): Promise<{ data: Ticket | null; message: string }> {
+    next(section: string, station: string): Promise<{ data: Ticket | null; message: string }> {
         return request('/console/tickets/next', {
             method: 'POST',
-            body: JSON.stringify({
-                section,
-                station,
-                operator_id: operatorId ?? undefined,
-            }),
+            body: JSON.stringify({ section, station }),
         });
     },
 
@@ -141,7 +143,6 @@ export const api = {
     transfer(
         ticketId: number,
         section: string,
-        fromOperatorId?: number | null,
         toOperatorId?: number | null,
         reason?: string,
     ): Promise<{ data: Ticket; message: string }> {
@@ -149,7 +150,6 @@ export const api = {
             method: 'POST',
             body: JSON.stringify({
                 section,
-                from_operator_id: fromOperatorId ?? undefined,
                 to_operator_id: toOperatorId ?? undefined,
                 reason: reason || undefined,
             }),
@@ -160,17 +160,10 @@ export const api = {
         return request(`/console/tickets/${ticketId}/reprint`, { method: 'POST' });
     },
 
-    printFailed(
-        ticketId: number,
-        message: string,
-        operatorId?: number | null,
-    ): Promise<{ data: Ticket; message: string }> {
+    printFailed(ticketId: number, message: string): Promise<{ data: Ticket; message: string }> {
         return request(`/console/tickets/${ticketId}/print-failed`, {
             method: 'POST',
-            body: JSON.stringify({
-                message,
-                operator_id: operatorId ?? undefined,
-            }),
+            body: JSON.stringify({ message }),
         });
     },
 
@@ -188,4 +181,106 @@ export const api = {
             body: JSON.stringify({ closing_time: closingTime }),
         });
     },
+
+    priorityProfiles(): Promise<{ data: PriorityProfile[] }> {
+        return request('/admin/priority-profiles');
+    },
+
+    createPriorityProfile(payload: PriorityProfilePayload): Promise<{ data: PriorityProfile; message: string }> {
+        return request('/admin/priority-profiles', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updatePriorityProfile(
+        id: number,
+        payload: PriorityProfilePayload,
+    ): Promise<{ data: PriorityProfile; message: string }> {
+        return request(`/admin/priority-profiles/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deletePriorityProfile(id: number): Promise<{ message: string }> {
+        return request(`/admin/priority-profiles/${id}`, { method: 'DELETE' });
+    },
+
+    services(section?: string): Promise<{ data: Service[] }> {
+        const params = new URLSearchParams();
+
+        if (section) {
+            params.set('section', section);
+        }
+
+        const query = params.toString();
+
+        return request(`/admin/services${query ? `?${query}` : ''}`);
+    },
+
+    createService(payload: ServicePayload): Promise<{ data: Service; message: string }> {
+        return request('/admin/services', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    updateService(id: number, payload: ServicePayload): Promise<{ data: Service; message: string }> {
+        return request(`/admin/services/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    deleteService(id: number): Promise<{ message: string }> {
+        return request(`/admin/services/${id}`, { method: 'DELETE' });
+    },
+
+    adminOperators(): Promise<{ data: Operator[] }> {
+        return request('/admin/operators');
+    },
+
+    simulateQueue(
+        generalCount: number,
+        preferentialCount: number,
+        profileId?: number | null,
+    ): Promise<{ data: SimulatedQueue }> {
+        return request('/admin/queue/simulate', {
+            method: 'POST',
+            body: JSON.stringify({
+                general_count: generalCount,
+                preferential_count: preferentialCount,
+                profile_id: profileId ?? undefined,
+            }),
+        });
+    },
 };
+
+export interface PriorityProfilePayload {
+    name: string;
+    description?: string | null;
+    general_ratio: number;
+    preferential_ratio: number;
+    aging_minutes: number;
+    max_consecutive_preferential: number;
+    is_active: boolean;
+    effective_from?: string | null;
+    effective_to?: string | null;
+}
+
+export interface ServicePayload {
+    section: string;
+    slug: string;
+    name: string;
+    label: string;
+    description?: string | null;
+    is_active: boolean;
+    available_days?: number[] | null;
+    available_from?: string | null;
+    available_to?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+    sort_order?: number;
+    operator_ids?: number[];
+}

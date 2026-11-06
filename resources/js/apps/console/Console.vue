@@ -4,8 +4,8 @@ import { api } from '../../shared/api/client';
 import { getEcho } from '../../shared/echo';
 import { createPrintDriver, type PrintDriverKind } from '../../shared/printing/escpos';
 import type {
+    AuthUser,
     ConsoleQueue,
-    Operator,
     OperatorSession,
     Section,
     Station,
@@ -14,14 +14,13 @@ import type {
 
 const SESSION_STORAGE_KEY = 'console-session-id';
 
+const currentUser = ref<AuthUser | null>(null);
 const sections = ref<Section[]>([]);
-const operators = ref<Operator[]>([]);
 const stations = ref<Station[]>([]);
 const session = ref<OperatorSession | null>(null);
 const queue = ref<ConsoleQueue | null>(null);
 
 const selectedSectionSlug = ref('');
-const selectedOperatorId = ref<number | null>(null);
 const selectedStationId = ref<number | null>(null);
 const changeStationId = ref<number | null>(null);
 const transferSectionSlug = ref('');
@@ -65,7 +64,13 @@ onMounted(async () => {
         driverKind.value = storedDriver;
     }
 
-    await Promise.all([loadSections(), loadOperators()]);
+    await loadCurrentUser();
+
+    if (!currentUser.value) {
+        return;
+    }
+
+    await loadSections();
 
     if (sections.value.length > 0) {
         selectedSectionSlug.value = sections.value[0].slug;
@@ -115,11 +120,16 @@ async function loadSections(): Promise<void> {
     }
 }
 
-async function loadOperators(): Promise<void> {
+async function loadCurrentUser(): Promise<void> {
     try {
-        const response = await api.operators();
-        operators.value = response.data;
+        const response = await api.me();
+        currentUser.value = response.data;
     } catch (exception) {
+        if (exception instanceof Error && 'status' in exception && exception.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+
         error.value = describeError(exception);
     }
 }
@@ -168,8 +178,8 @@ async function openSession(): Promise<void> {
         return;
     }
 
-    if (!selectedOperatorId.value || !selectedSectionSlug.value || !selectedStationId.value) {
-        error.value = 'Seleccione operador, sección y ventanilla para abrir la jornada.';
+    if (!selectedSectionSlug.value || !selectedStationId.value) {
+        error.value = 'Seleccione sección y ventanilla para abrir la jornada.';
         return;
     }
 
@@ -179,7 +189,6 @@ async function openSession(): Promise<void> {
 
     try {
         const response = await api.openSession(
-            selectedOperatorId.value,
             selectedSectionSlug.value,
             selectedStationId.value,
         );
@@ -195,7 +204,6 @@ async function openSession(): Promise<void> {
 
 async function useSession(activeSession: OperatorSession): Promise<void> {
     session.value = activeSession;
-    selectedOperatorId.value = activeSession.operator?.id ?? null;
     selectedSectionSlug.value = activeSession.section?.slug ?? '';
     selectedStationId.value = activeSession.station?.id ?? null;
     changeStationId.value = activeSession.station?.id ?? null;
@@ -265,7 +273,6 @@ async function loadQueue(): Promise<void> {
         const response = await api.queue(
             session.value.section.slug,
             currentStationName.value,
-            session.value.operator?.id ?? null,
         );
 
         queue.value = response.data;
@@ -310,7 +317,6 @@ async function callNext(): Promise<void> {
         const response = await api.next(
             session.value.section.slug,
             currentStationName.value,
-            session.value.operator?.id ?? null,
         );
 
         message.value = response.message;
@@ -363,7 +369,7 @@ async function reprint(): Promise<void> {
             printState.value = 'failed';
             const detail = describeError(printException);
             error.value = `No se pudo imprimir: ${detail}`;
-            await api.printFailed(activeTicket.value.id, detail, session.value?.operator?.id ?? null);
+            await api.printFailed(activeTicket.value.id, detail);
         }
     } catch (exception) {
         printState.value = 'idle';
@@ -386,7 +392,6 @@ async function transfer(): Promise<void> {
         const response = await api.transfer(
             activeTicket.value.id,
             transferSectionSlug.value,
-            session.value?.operator?.id ?? null,
             null,
             transferReason.value,
         );
@@ -406,7 +411,23 @@ function changeDriver(): void {
     localStorage.setItem('print-driver', driverKind.value);
 }
 
+async function logout(): Promise<void> {
+    try {
+        await api.logout();
+    } catch {
+        // La redirección a login es suficiente aunque la API falle.
+    }
+
+    window.location.href = '/login';
+}
+
 function describeError(exception: unknown): string {
+    if (exception instanceof Error && 'status' in exception && exception.status === 401) {
+        window.location.href = '/login';
+
+        return 'La sesión expiró.';
+    }
+
     return exception instanceof Error ? exception.message : 'Ocurrió un error inesperado.';
 }
 </script>
@@ -417,6 +438,20 @@ function describeError(exception: unknown): string {
             <div>
                 <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Gestión de tickets</p>
                 <h1 class="text-3xl font-semibold">Consola de operador</h1>
+            </div>
+
+            <div v-if="currentUser" class="flex flex-wrap items-center gap-3">
+                <div class="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Usuario</p>
+                    <p class="text-sm font-medium text-slate-100">{{ currentUser.name }}</p>
+                </div>
+                <button
+                    type="button"
+                    class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-red-400 hover:text-red-200"
+                    @click="logout"
+                >
+                    Salir
+                </button>
             </div>
 
             <div v-if="session" class="flex flex-wrap items-end gap-4">
@@ -438,20 +473,7 @@ function describeError(exception: unknown): string {
                 cambiarse después, dejando historial.
             </p>
 
-            <div class="mt-8 grid gap-5 sm:grid-cols-3">
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
-                    Operador
-                    <select
-                        v-model="selectedOperatorId"
-                        class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
-                    >
-                        <option :value="null" disabled>Seleccione</option>
-                        <option v-for="operator in operators" :key="operator.id" :value="operator.id">
-                            {{ operator.name }} · {{ operator.role_label }}
-                        </option>
-                    </select>
-                </label>
-
+            <div class="mt-8 grid gap-5 sm:grid-cols-2">
                 <label class="flex flex-col gap-2 text-sm text-slate-300">
                     Sección
                     <select
@@ -486,11 +508,6 @@ function describeError(exception: unknown): string {
             >
                 {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
             </button>
-
-            <p v-if="operators.length === 0" class="mt-6 text-sm text-amber-300">
-                No hay operadores activos. Cree un usuario operador o ejecute el seeder local
-                <code class="rounded bg-slate-800 px-2 py-1">php artisan db:seed --class=DemoOperatorSeeder</code>.
-            </p>
         </section>
 
         <section v-else class="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[2fr_1fr]">
@@ -509,10 +526,24 @@ function describeError(exception: unknown): string {
 
                 <div v-if="activeTicket" class="mt-8">
                     <p class="text-7xl font-black tracking-tight">{{ activeTicket.label }}</p>
-                    <p class="mt-3 text-xl text-slate-300">{{ activeTicket.category?.name }}</p>
+                    <p class="mt-3 text-xl text-slate-300">
+                        {{ activeTicket.service?.name ?? activeTicket.category?.name }}
+                    </p>
                     <div class="mt-6 flex flex-wrap gap-3 text-sm">
                         <span class="rounded-full bg-sky-500/15 px-4 py-1 text-sky-300">
                             {{ activeTicket.status_label }}
+                        </span>
+                        <span
+                            v-if="activeTicket.is_preferential"
+                            class="rounded-full bg-fuchsia-500/15 px-4 py-1 text-fuchsia-300"
+                        >
+                            Preferencial
+                        </span>
+                        <span
+                            v-if="activeTicket.service"
+                            class="rounded-full bg-emerald-500/15 px-4 py-1 text-emerald-300"
+                        >
+                            Servicio: {{ activeTicket.service.name }}
                         </span>
                         <span class="rounded-full bg-slate-800 px-4 py-1 text-slate-300">
                             {{ activeTicket.call_count }} llamado(s)

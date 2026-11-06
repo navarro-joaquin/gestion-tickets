@@ -4,11 +4,13 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Domain\Operations\OperatorSession;
+use App\Domain\Services\Service;
 use App\Domain\Users\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -46,5 +48,19 @@ class User extends Authenticatable
     public function operatorSessions(): HasMany
     {
         return $this->hasMany(OperatorSession::class, 'operator_id');
+    }
+
+    /**
+     * @return BelongsToMany<Service, $this>
+     */
+    public function authorizedServices(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'service_user')
+            ->withTimestamps();
+    }
+
+    public function isAuthorizedForService(Service $service): bool
+    {
+        return $this->authorizedServices()->whereKey($service->getKey())->exists();
     }
 }

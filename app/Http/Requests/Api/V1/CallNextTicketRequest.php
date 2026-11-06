@@ -24,11 +24,6 @@ class CallNextTicketRequest extends FormRequest
                 Rule::exists('sections', 'slug')->where('is_active', true),
             ],
             'station' => ['required', 'string', 'max:50'],
-            'operator_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where('is_active', true),
-            ],
         ];
     }
 }

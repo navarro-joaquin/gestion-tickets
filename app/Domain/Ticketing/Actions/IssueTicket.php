@@ -2,10 +2,12 @@
 
 namespace App\Domain\Ticketing\Actions;
 
+use App\Domain\Priorities\PriorityProfileResolver;
 use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use App\Domain\Sections\SectionActivationGate;
 use App\Domain\Sections\SectionTicketCode;
+use App\Domain\Services\Service;
 use App\Domain\Ticketing\QueueNotifier;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketEvent;
@@ -23,16 +25,18 @@ final class IssueTicket
     public function __construct(
         private readonly SectionActivationGate $gate,
         private readonly QueueNotifier $notifier,
+        private readonly PriorityProfileResolver $profiles,
     ) {}
 
     public function handle(
         string $sectionSlug,
-        string $categorySlug,
+        ?string $categorySlug = null,
+        ?string $serviceSlug = null,
         ?CarbonInterface $moment = null,
     ): Ticket {
         $now = $moment ? Carbon::instance($moment) : now();
 
-        $ticket = DB::transaction(function () use ($sectionSlug, $categorySlug, $now): Ticket {
+        $ticket = DB::transaction(function () use ($sectionSlug, $categorySlug, $serviceSlug, $now): Ticket {
             $section = Section::query()
                 ->where('slug', $sectionSlug)
                 ->lockForUpdate()
@@ -50,7 +54,39 @@ final class IssueTicket
                 ]);
             }
 
-            $category = Category::query()->where('slug', $categorySlug)->first();
+            $profile = $this->profiles->resolve($now);
+
+            $service = null;
+
+            if ($serviceSlug !== null) {
+                $service = Service::query()
+                    ->where('section_id', $section->id)
+                    ->where('slug', $serviceSlug)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $service) {
+                    throw ValidationException::withMessages([
+                        'service' => ['El servicio indicado no existe en esta sección.'],
+                    ]);
+                }
+
+                if (! $service->isAvailableAt($now)) {
+                    throw ValidationException::withMessages([
+                        'service' => ['El servicio no está disponible en este momento.'],
+                    ]);
+                }
+
+                $category = Category::query()->where('slug', 'general')->first();
+            } else {
+                if ($categorySlug === null) {
+                    throw ValidationException::withMessages([
+                        'category' => ['Debe indicar una categoría o un servicio.'],
+                    ]);
+                }
+
+                $category = Category::query()->where('slug', $categorySlug)->first();
+            }
 
             if (! $category) {
                 throw ValidationException::withMessages([
@@ -94,7 +130,26 @@ final class IssueTicket
                 'section_id' => $section->id,
                 'current_section_id' => $section->id,
                 'section_ticket_code_id' => $ticketCode->id,
+                'service_id' => $service?->id,
                 'category_id' => $category->id,
+                'service_label' => $service?->label,
+                'is_preferential' => $category->is_preferential,
+                'priority_profile_id' => $profile->getKey(),
+                'priority_score' => 0,
+                'priority_snapshot' => [
+                    'profile_id' => $profile->getKey(),
+                    'profile_name' => $profile->name,
+                    'ratios' => [
+                        'general' => $profile->general_ratio,
+                        'preferential' => $profile->preferential_ratio,
+                    ],
+                    'aging_minutes' => $profile->aging_minutes,
+                    'max_consecutive_preferential' => $profile->max_consecutive_preferential,
+                    'selected_group' => $category->is_preferential ? 'preferential' : 'general',
+                    'reason' => 'issued',
+                    'waited_minutes' => 0,
+                    'score' => 0,
+                ],
                 'code' => $ticketCode->code,
                 'period_key' => $periodKey,
                 'number' => $sequence->last_number,
@@ -109,6 +164,7 @@ final class IssueTicket
                 'occurred_at' => $now,
                 'payload' => [
                     'category' => $category->slug,
+                    'service' => $service?->slug,
                     'code' => $ticketCode->code,
                     'number' => $ticket->number,
                 ],
@@ -119,6 +175,6 @@ final class IssueTicket
 
         $this->notifier->notify($sectionSlug);
 
-        return $ticket->load(['section', 'currentSection', 'category', 'ticketCode']);
+        return $ticket->load(['section', 'currentSection', 'category', 'ticketCode', 'service']);
     }
 }

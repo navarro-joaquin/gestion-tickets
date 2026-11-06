@@ -35,15 +35,18 @@ class ConsoleController extends Controller
                 Rule::exists('sections', 'slug')->where('is_active', true),
             ],
             'station' => ['nullable', 'string', 'max:50'],
-            'operator_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id'),
-            ],
         ]);
 
         $section = Section::query()->where('slug', $validated['section'])->firstOrFail();
-        $stationLabel = $validated['station'] ?? null;
+
+        $session = OperatorSession::query()
+            ->active()
+            ->where('operator_id', $request->user()->id)
+            ->with(['operator', 'section', 'activeAssignment.station', 'assignments.station'])
+            ->first();
+
+        $stationLabel = $validated['station']
+            ?? $session?->activeAssignment?->station?->name;
 
         $activeTicket = null;
 
@@ -52,17 +55,7 @@ class ConsoleController extends Controller
                 ->active()
                 ->where('current_section_id', $section->id)
                 ->where('station_label', $stationLabel)
-                ->with(['section', 'currentSection', 'category'])
-                ->first();
-        }
-
-        $session = null;
-
-        if (! empty($validated['operator_id'])) {
-            $session = OperatorSession::query()
-                ->active()
-                ->where('operator_id', $validated['operator_id'])
-                ->with(['operator', 'section', 'activeAssignment.station', 'assignments.station'])
+                ->with(['section', 'currentSection', 'category', 'service'])
                 ->first();
         }
 
@@ -87,10 +80,12 @@ class ConsoleController extends Controller
 
     public function next(CallNextTicketRequest $request, CallNextTicket $action): JsonResponse
     {
+        $this->requireActiveSession($request);
+
         $ticket = $action->handle(
             $request->validated('section'),
             $request->validated('station'),
-            $request->validated('operator_id'),
+            $request->user()->id,
         );
 
         return response()->json([
@@ -103,6 +98,8 @@ class ConsoleController extends Controller
 
     public function recall(Ticket $ticket, RecallTicket $action): JsonResponse
     {
+        $this->authorize('operate', $ticket);
+
         return response()->json([
             'data' => new TicketResource($action->handle($ticket)),
         ]);
@@ -110,6 +107,8 @@ class ConsoleController extends Controller
 
     public function start(Ticket $ticket, StartTicket $action): JsonResponse
     {
+        $this->authorize('operate', $ticket);
+
         return response()->json([
             'data' => new TicketResource($action->handle($ticket)),
         ]);
@@ -117,6 +116,8 @@ class ConsoleController extends Controller
 
     public function finish(Ticket $ticket, FinishTicket $action): JsonResponse
     {
+        $this->authorize('operate', $ticket);
+
         return response()->json([
             'data' => new TicketResource($action->handle($ticket)),
         ]);
@@ -127,10 +128,12 @@ class ConsoleController extends Controller
         Ticket $ticket,
         TransferTicket $action,
     ): JsonResponse {
+        $this->authorize('transfer', $ticket);
+
         $ticket = $action->handle(
             $ticket,
             $request->validated('section'),
-            $request->validated('from_operator_id'),
+            $request->user()->id,
             $request->validated('to_operator_id'),
             $request->validated('reason'),
         );
@@ -142,12 +145,15 @@ class ConsoleController extends Controller
     }
 
     public function reprint(
+        Request $request,
         Ticket $ticket,
         ReprintTicket $action,
         EscPosTicketFormatter $formatter,
     ): JsonResponse {
-        $ticket = $action->handle($ticket);
-        $ticket->loadMissing(['section', 'category']);
+        $this->authorize('reprint', $ticket);
+
+        $ticket = $action->handle($ticket, $request->user()->id);
+        $ticket->loadMissing(['section', 'category', 'service']);
 
         return response()->json([
             'data' => new TicketResource($ticket),
@@ -164,15 +170,33 @@ class ConsoleController extends Controller
         Ticket $ticket,
         RegisterPrintFailure $action,
     ): JsonResponse {
+        $this->authorize('reprint', $ticket);
+
         $ticket = $action->handle(
             $ticket,
             $request->validated('message'),
-            $request->validated('operator_id'),
+            $request->user()->id,
         );
 
         return response()->json([
             'data' => new TicketResource($ticket),
             'message' => 'Fallo de impresión registrado.',
         ]);
+    }
+
+    private function requireActiveSession(Request $request): OperatorSession
+    {
+        $session = OperatorSession::query()
+            ->active()
+            ->where('operator_id', $request->user()->id)
+            ->first();
+
+        abort_unless(
+            $session !== null,
+            403,
+            'Debe abrir una jornada antes de llamar tickets.',
+        );
+
+        return $session;
     }
 }

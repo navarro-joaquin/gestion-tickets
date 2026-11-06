@@ -9,6 +9,17 @@ export interface TicketCode {
     categories: Category[];
 }
 
+export interface ServiceSummary {
+    id: number;
+    slug: string;
+    name: string;
+    label: string;
+    description: string | null;
+    available_from: string | null;
+    available_to: string | null;
+    available_days: number[] | null;
+}
+
 export interface Section {
     id: number;
     slug: string;
@@ -16,6 +27,7 @@ export interface Section {
     is_active: boolean;
     matrix_confirmed_at: string | null;
     codes: TicketCode[];
+    services: ServiceSummary[];
 }
 
 export interface Station {
@@ -30,6 +42,15 @@ export interface Operator {
     name: string;
     role: string;
     role_label: string;
+}
+
+export interface AuthUser {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    role_label: string;
+    is_active: boolean;
 }
 
 export interface TransferHistory {
@@ -54,6 +75,18 @@ export interface TransferHistory {
     transferred_at: string;
 }
 
+export interface PrioritySnapshot {
+    profile_name?: string;
+    selected_group?: string;
+    reason?: string;
+    waited_minutes?: number;
+    score?: number;
+    ratios?: {
+        general: number;
+        preferential: number;
+    };
+}
+
 export interface Ticket {
     id: number;
     code: string;
@@ -63,8 +96,12 @@ export interface Ticket {
     status: string;
     status_label: string;
     is_transferred: boolean;
+    is_preferential: boolean;
+    service_label: string | null;
     station_label: string | null;
     call_count: number;
+    priority_score: number;
+    priority_snapshot: PrioritySnapshot | null;
     issued_at: string;
     called_at: string | null;
     started_at: string | null;
@@ -80,6 +117,12 @@ export interface Ticket {
     } | null;
     transfers?: TransferHistory[];
     category?: Category;
+    service?: {
+        id: number;
+        slug: string;
+        name: string;
+        label: string;
+    } | null;
 }
 
 export interface IssuedTicketResponse {
@@ -143,4 +186,57 @@ export interface AdminSettings {
     closing_time: string;
     next_closing_at: string;
     timezone: string;
+}
+
+export interface PriorityProfile {
+    id: number;
+    name: string;
+    description: string | null;
+    general_ratio: number;
+    preferential_ratio: number;
+    aging_minutes: number;
+    max_consecutive_preferential: number;
+    is_active: boolean;
+    effective_from: string | null;
+    effective_to: string | null;
+    is_effective_now: boolean;
+}
+
+export interface Service {
+    id: number;
+    slug: string;
+    name: string;
+    label: string;
+    description: string | null;
+    is_active: boolean;
+    is_available_now: boolean;
+    available_days: number[] | null;
+    available_from: string | null;
+    available_to: string | null;
+    effective_from: string | null;
+    effective_to: string | null;
+    sort_order: number;
+    section?: {
+        slug: string;
+        name: string;
+    };
+    operators?: Array<{
+        id: number;
+        name: string;
+    }>;
+}
+
+export interface SimulatedQueue {
+    profile: PriorityProfile;
+    sequence: Array<{
+        position: number;
+        group: string;
+        reason: string;
+        general_remaining: number;
+        preferential_remaining: number;
+    }>;
+    totals: {
+        general: number;
+        preferential: number;
+    };
 }

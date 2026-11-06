@@ -24,9 +24,16 @@ class IssueTicketRequest extends FormRequest
                 Rule::exists('sections', 'slug')->where('is_active', true),
             ],
             'category' => [
-                'required',
+                'nullable',
+                'required_without:service',
                 'string',
                 Rule::exists('categories', 'slug'),
+            ],
+            'service' => [
+                'nullable',
+                'required_without:category',
+                'string',
+                Rule::exists('services', 'slug'),
             ],
         ];
     }

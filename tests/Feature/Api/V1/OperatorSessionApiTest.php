@@ -25,7 +25,8 @@ class OperatorSessionApiTest extends TestCase
         User::factory()->create(['role' => UserRole::Admin, 'name' => 'Admin']);
         User::factory()->create(['is_active' => false, 'name' => 'Inactivo']);
 
-        $this->getJson('/api/v1/console/operators')
+        $this->actingAs($operator)
+            ->getJson('/api/v1/console/operators')
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.name', 'Ana Operadora')
@@ -37,7 +38,8 @@ class OperatorSessionApiTest extends TestCase
     {
         $this->seedMatrix();
 
-        $this->getJson('/api/v1/console/stations?section=plataforma')
+        $this->actingAs(User::factory()->create())
+            ->getJson('/api/v1/console/stations?section=plataforma')
             ->assertOk()
             ->assertJsonCount(3, 'data')
             ->assertJsonPath('data.0.name', 'Ventanilla 1')
@@ -58,8 +60,9 @@ class OperatorSessionApiTest extends TestCase
             ->orderBy('sort_order')
             ->get();
 
+        $this->actingAs($operator);
+
         $created = $this->postJson('/api/v1/console/session', [
-            'operator_id' => $operator->id,
             'section' => 'plataforma',
             'station_id' => $stations[0]->id,
         ])
@@ -70,7 +73,7 @@ class OperatorSessionApiTest extends TestCase
             ->assertJsonPath('data.is_active', true)
             ->json('data');
 
-        $this->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201&operator_id='.$operator->id)
+        $this->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201')
             ->assertOk()
             ->assertJsonPath('data.session.id', $created['id'])
             ->assertJsonPath('data.session.station.name', 'Ventanilla 1');
@@ -97,11 +100,11 @@ class OperatorSessionApiTest extends TestCase
             ->where('section_id', $this->section('odeco')->id)
             ->firstOrFail();
 
-        $this->postJson('/api/v1/console/session', [
-            'operator_id' => User::factory()->create()->id,
-            'section' => 'plataforma',
-            'station_id' => $station->id,
-        ])
+        $this->actingAs(User::factory()->create())
+            ->postJson('/api/v1/console/session', [
+                'section' => 'plataforma',
+                'station_id' => $station->id,
+            ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['station_id']);
     }
@@ -115,14 +118,13 @@ class OperatorSessionApiTest extends TestCase
             ->where('section_id', $this->section('plataforma')->id)
             ->firstOrFail();
 
-        $this->postJson('/api/v1/console/session', [
-            'operator_id' => $operator->id,
-            'section' => 'plataforma',
-            'station_id' => $station->id,
-        ])->assertCreated();
+        $this->actingAs($operator)
+            ->postJson('/api/v1/console/session', [
+                'section' => 'plataforma',
+                'station_id' => $station->id,
+            ])->assertCreated();
 
         $this->postJson('/api/v1/console/session', [
-            'operator_id' => $operator->id,
             'section' => 'plataforma',
             'station_id' => $station->id,
         ])
@@ -139,8 +141,9 @@ class OperatorSessionApiTest extends TestCase
             ->where('section_id', $this->section('plataforma')->id)
             ->firstOrFail();
 
+        $this->actingAs($operator);
+
         $created = $this->postJson('/api/v1/console/session', [
-            'operator_id' => $operator->id,
             'section' => 'plataforma',
             'station_id' => $station->id,
         ])->json('data');

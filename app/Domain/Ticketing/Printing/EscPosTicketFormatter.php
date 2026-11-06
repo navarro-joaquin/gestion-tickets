@@ -28,12 +28,14 @@ final class EscPosTicketFormatter
 
     public function format(Ticket $ticket): string
     {
-        $ticket->loadMissing(['section', 'currentSection', 'category']);
+        $ticket->loadMissing(['section', 'currentSection', 'category', 'service']);
+
+        $description = $ticket->service?->name ?? $ticket->category->name;
 
         return self::INIT.self::CODEPAGE_850.self::ALIGN_CENTER.self::BOLD_ON
             .$this->encode($this->sectionName($ticket))."\n"
             .self::BOLD_OFF
-            .$this->encode($ticket->category->name)."\n\n"
+            .$this->encode($description)."\n\n"
             .self::DOUBLE_ON.$this->encode($ticket->label)."\n".self::DOUBLE_OFF
             ."\n"
             .$this->encode($ticket->issued_at->format('d/m/Y H:i'))."\n\n"
@@ -43,11 +45,11 @@ final class EscPosTicketFormatter
 
     public function preview(Ticket $ticket): string
     {
-        $ticket->loadMissing(['section', 'currentSection', 'category']);
+        $ticket->loadMissing(['section', 'currentSection', 'category', 'service']);
 
         return implode("\n", [
             $this->sectionName($ticket),
-            $ticket->category->name,
+            $ticket->service?->name ?? $ticket->category->name,
             $ticket->label,
             $ticket->issued_at->format('d/m/Y H:i'),
             'Espere su llamado',

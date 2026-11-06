@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../../shared/api/client';
 import { createPrintDriver, type PrintDriverKind } from '../../shared/printing/escpos';
-import type { Category, Section, Ticket } from '../../shared/types/api';
+import type { Category, Section, ServiceSummary, Ticket } from '../../shared/types/api';
 
 const sections = ref<Section[]>([]);
 const selectedSection = ref<Section | null>(null);
@@ -33,6 +33,8 @@ const categories = computed<Category[]>(() => {
         (left, right) => Number(left.is_preferential) - Number(right.is_preferential),
     );
 });
+
+const services = computed<ServiceSummary[]>(() => selectedSection.value?.services ?? []);
 
 onMounted(async () => {
     const storedDriver = localStorage.getItem('print-driver');
@@ -75,8 +77,24 @@ function clearSection(): void {
     error.value = '';
 }
 
-async function issue(category: Category): Promise<void> {
-    if (!selectedSection.value || busy.value) {
+async function issueCategory(category: Category): Promise<void> {
+    if (!selectedSection.value) {
+        return;
+    }
+
+    await issue(selectedSection.value.slug, category.slug);
+}
+
+async function issueService(service: ServiceSummary): Promise<void> {
+    if (!selectedSection.value) {
+        return;
+    }
+
+    await issue(selectedSection.value.slug, undefined, service.slug);
+}
+
+async function issue(sectionSlug: string, categorySlug?: string, serviceSlug?: string): Promise<void> {
+    if (busy.value) {
         return;
     }
 
@@ -86,7 +104,7 @@ async function issue(category: Category): Promise<void> {
     printState.value = 'idle';
 
     try {
-        const response = await api.issue(selectedSection.value.slug, category.slug);
+        const response = await api.issue(sectionSlug, categorySlug, serviceSlug);
         ticket.value = response.data;
 
         printState.value = 'printing';
@@ -171,26 +189,53 @@ function reset(): void {
                 <p class="text-lg text-slate-400">Elija el motivo de su visita</p>
             </div>
 
-            <div v-if="!ticket" class="mx-auto grid w-full max-w-5xl gap-6 md:grid-cols-2">
-                <button
-                    v-for="category in categories"
-                    :key="category.slug"
-                    type="button"
-                    class="rounded-3xl border border-slate-800 bg-slate-900 p-12 text-left transition hover:-translate-y-1 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="busy"
-                    @click="issue(category)"
-                >
-                    <span class="text-sm uppercase tracking-[0.2em] text-sky-400">
-                        {{ category.is_preferential ? 'Atención preferencial' : 'Atención general' }}
-                    </span>
-                    <span class="mt-4 block text-3xl font-semibold">{{ category.name }}</span>
-                </button>
+            <div v-if="!ticket" class="mx-auto w-full max-w-5xl">
+                <div v-if="services.length > 0" class="mb-10">
+                    <h3 class="text-sm uppercase tracking-[0.25em] text-emerald-400">Servicios exclusivos</h3>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <button
+                            v-for="service in services"
+                            :key="service.slug"
+                            type="button"
+                            class="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-8 text-left transition hover:-translate-y-1 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="busy"
+                            @click="issueService(service)"
+                        >
+                            <span class="text-sm uppercase tracking-[0.2em] text-emerald-400">
+                                Servicio · {{ service.label }}
+                            </span>
+                            <span class="mt-3 block text-2xl font-semibold">{{ service.name }}</span>
+                            <span v-if="service.description" class="mt-2 block text-sm text-slate-400">
+                                {{ service.description }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <h3 class="text-sm uppercase tracking-[0.25em] text-sky-400">Atención por categoría</h3>
+                <div class="mt-4 grid gap-6 md:grid-cols-2">
+                    <button
+                        v-for="category in categories"
+                        :key="category.slug"
+                        type="button"
+                        class="rounded-3xl border border-slate-800 bg-slate-900 p-12 text-left transition hover:-translate-y-1 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="busy"
+                        @click="issueCategory(category)"
+                    >
+                        <span class="text-sm uppercase tracking-[0.2em] text-sky-400">
+                            {{ category.is_preferential ? 'Atención preferencial' : 'Atención general' }}
+                        </span>
+                        <span class="mt-4 block text-3xl font-semibold">{{ category.name }}</span>
+                    </button>
+                </div>
             </div>
 
             <div v-else class="mx-auto w-full max-w-3xl rounded-[2rem] border border-sky-500/40 bg-slate-900 p-14 text-center">
                 <p class="text-lg uppercase tracking-[0.3em] text-sky-400">Su ticket</p>
                 <p class="mt-6 text-8xl font-black tracking-tight">{{ ticket.label }}</p>
-                <p class="mt-6 text-2xl text-slate-300">{{ ticket.category?.name }}</p>
+                <p class="mt-6 text-2xl text-slate-300">
+                    {{ ticket.service?.name ?? ticket.category?.name }}
+                </p>
                 <p class="mt-3 text-lg text-slate-500">{{ ticket.section?.name }}</p>
 
                 <p v-if="printState === 'printing'" class="mt-10 text-lg text-sky-300">

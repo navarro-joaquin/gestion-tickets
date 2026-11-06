@@ -23,11 +23,6 @@ class TransferTicketRequest extends FormRequest
                 'string',
                 Rule::exists('sections', 'slug')->where('is_active', true),
             ],
-            'from_operator_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where('is_active', true),
-            ],
             'to_operator_id' => [
                 'nullable',
                 'integer',

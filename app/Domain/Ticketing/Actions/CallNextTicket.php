@@ -3,6 +3,7 @@
 namespace App\Domain\Ticketing\Actions;
 
 use App\Domain\Operations\OperatorSession;
+use App\Domain\Priorities\QueuePrioritySelector;
 use App\Domain\Sections\Section;
 use App\Domain\Sections\SectionActivationGate;
 use App\Domain\Ticketing\AssignmentReason;
@@ -12,6 +13,7 @@ use App\Domain\Ticketing\TicketAssignment;
 use App\Domain\Ticketing\TicketEvent;
 use App\Domain\Ticketing\TicketEventType;
 use App\Domain\Ticketing\TicketStatus;
+use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ final class CallNextTicket
     public function __construct(
         private readonly SectionActivationGate $gate,
         private readonly QueueNotifier $notifier,
+        private readonly QueuePrioritySelector $selector,
     ) {}
 
     public function handle(
@@ -93,17 +96,14 @@ final class CallNextTicket
                 }
             }
 
-            $ticket = Ticket::query()
-                ->where('current_section_id', $section->id)
-                ->where('status', TicketStatus::Waiting)
-                ->orderBy('issued_at')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->first();
+            $operator = $operatorId !== null ? User::query()->find($operatorId) : null;
+            $selection = $this->selector->select($section, $now, $operator);
 
-            if (! $ticket) {
+            if (! $selection) {
                 return null;
             }
+
+            $ticket = $selection->ticket;
 
             $ticket->update([
                 'status' => TicketStatus::Called,
@@ -111,6 +111,9 @@ final class CallNextTicket
                 'operator_id' => $operatorId,
                 'called_at' => $now,
                 'call_count' => $ticket->call_count + 1,
+                'priority_profile_id' => $selection->snapshot['profile_id'] ?? null,
+                'priority_score' => $selection->snapshot['score'] ?? 0,
+                'priority_snapshot' => $selection->snapshot,
             ]);
 
             TicketAssignment::query()->create([
@@ -129,6 +132,7 @@ final class CallNextTicket
                 'payload' => [
                     'station' => $stationLabel,
                     'call_count' => $ticket->call_count,
+                    'priority' => $selection->snapshot,
                 ],
             ]);
 
@@ -139,6 +143,6 @@ final class CallNextTicket
             $this->notifier->notify($sectionSlug);
         }
 
-        return $ticket?->load(['section', 'currentSection', 'category', 'operator']);
+        return $ticket?->load(['section', 'currentSection', 'category', 'operator', 'service']);
     }
 }

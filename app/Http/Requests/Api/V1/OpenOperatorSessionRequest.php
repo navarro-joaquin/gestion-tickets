@@ -18,11 +18,6 @@ class OpenOperatorSessionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'operator_id' => [
-                'required',
-                'integer',
-                Rule::exists('users', 'id')->where('is_active', true),
-            ],
             'section' => [
                 'required',
                 'string',
