@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Sections\Section;
 use App\Domain\Users\UserRole;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -18,6 +19,12 @@ class DemoOperatorSeeder extends Seeder
 {
     public function run(): void
     {
+        $defaultSection = Section::query()->where('slug', 'plataforma')->first();
+        $defaultStation = $defaultSection
+            ?->stations()
+            ->where('is_active', true)
+            ->first();
+
         User::query()->updateOrCreate(
             ['email' => 'operador@demo.local'],
             [
@@ -25,6 +32,8 @@ class DemoOperatorSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => UserRole::Operator,
                 'is_active' => true,
+                'default_section_id' => $defaultSection?->id,
+                'default_station_id' => $defaultStation?->id,
             ],
         );
 
@@ -35,6 +44,8 @@ class DemoOperatorSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => UserRole::Admin,
                 'is_active' => true,
+                'default_section_id' => null,
+                'default_station_id' => null,
             ],
         );
     }

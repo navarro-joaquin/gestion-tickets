@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Audit\AuditLogger;
 use App\Domain\Operations\OperatorSession;
+use App\Domain\Sections\Section;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Users\UserRole;
 use App\Http\Controllers\Controller;
@@ -20,6 +21,7 @@ class AdminUserController extends Controller
     public function index(): AnonymousResourceCollection
     {
         $users = User::query()
+            ->with(['defaultSection', 'defaultStation'])
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
@@ -40,7 +42,10 @@ class AdminUserController extends Controller
 
     public function store(AdminUserRequest $request, AuditLogger $audit): JsonResponse
     {
-        $user = User::query()->create($request->validated());
+        $user = User::query()->create(
+            $this->withDefaultAssignment($request->validated()),
+        );
+        $user->load(['defaultSection', 'defaultStation']);
 
         $audit->record('user.created', $user, null, $audit->userPayload($user), $request);
 
@@ -55,7 +60,7 @@ class AdminUserController extends Controller
         User $user,
         AuditLogger $audit,
     ): JsonResponse {
-        $data = $request->validated();
+        $data = $this->withDefaultAssignment($request->validated());
 
         if ($request->user()?->id === $user->id) {
             if (! $data['is_active']) {
@@ -78,6 +83,7 @@ class AdminUserController extends Controller
         }
 
         $user->update($data);
+        $user->load(['defaultSection', 'defaultStation']);
 
         $audit->record('user.updated', $user, $before, $audit->userPayload($user), $request);
 
@@ -114,6 +120,34 @@ class AdminUserController extends Controller
         return response()->json([
             'message' => 'Usuario eliminado.',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withDefaultAssignment(array $data): array
+    {
+        $sectionSlug = $data['default_section'] ?? null;
+        $stationId = $data['default_station_id'] ?? null;
+
+        unset($data['default_section'], $data['default_station_id']);
+
+        $role = UserRole::tryFrom((string) ($data['role'] ?? ''));
+
+        if (! in_array($role, [UserRole::Operator, UserRole::Supervisor], true)) {
+            $data['default_section_id'] = null;
+            $data['default_station_id'] = null;
+
+            return $data;
+        }
+
+        $data['default_section_id'] = Section::query()
+            ->where('slug', $sectionSlug)
+            ->value('id');
+        $data['default_station_id'] = $stationId === null ? null : (int) $stationId;
+
+        return $data;
     }
 
     private function hasHistory(User $user): bool

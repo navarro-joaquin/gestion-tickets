@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { api } from '../../../shared/api/client';
-import type { AdminUser } from '../../../shared/types/api';
+import type { AdminSection, AdminUser, Station } from '../../../shared/types/api';
 
 interface UserForm {
     id: number | null;
@@ -10,6 +10,8 @@ interface UserForm {
     password: string;
     role: string;
     is_active: boolean;
+    default_section: string;
+    default_station_id: number | null;
 }
 
 const ROLES = [
@@ -19,12 +21,28 @@ const ROLES = [
 ];
 
 const users = ref<AdminUser[]>([]);
+const sections = ref<AdminSection[]>([]);
+const stations = ref<Station[]>([]);
 const form = ref<UserForm>(emptyForm());
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
 
-onMounted(load);
+const requiresDefaultAssignment = computed<boolean>(
+    () => form.value.role === 'operator' || form.value.role === 'supervisor',
+);
+
+const availableDefaultStations = computed<Station[]>(() =>
+    stations.value.filter(
+        (station) => station.is_active && station.section?.slug === form.value.default_section,
+    ),
+);
+
+onMounted(async () => {
+    await Promise.all([loadSections(), loadStations()]);
+    reset();
+    await load();
+});
 
 async function load(): Promise<void> {
     try {
@@ -35,7 +53,35 @@ async function load(): Promise<void> {
     }
 }
 
+async function loadSections(): Promise<void> {
+    try {
+        const response = await api.adminSections();
+        sections.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
+async function loadStations(): Promise<void> {
+    try {
+        const response = await api.adminStations();
+        stations.value = response.data;
+    } catch (exception) {
+        error.value = describeError(exception);
+    }
+}
+
 function edit(user: AdminUser): void {
+    const fallbackSection = user.default_section?.slug ?? sections.value[0]?.slug ?? '';
+    const fallbackStation = stations.value.find(
+        (station) => station.is_active && station.section?.slug === fallbackSection,
+    );
+    const keepsCurrentStation = stations.value.some(
+        (station) => station.is_active
+            && station.id === user.default_station?.id
+            && station.section?.slug === fallbackSection,
+    );
+
     form.value = {
         id: user.id,
         name: user.name,
@@ -43,11 +89,19 @@ function edit(user: AdminUser): void {
         password: '',
         role: user.role,
         is_active: user.is_active,
+        default_section: fallbackSection,
+        default_station_id: keepsCurrentStation
+            ? user.default_station?.id ?? null
+            : fallbackStation?.id ?? null,
     };
 }
 
 function reset(): void {
     form.value = emptyForm();
+}
+
+function onSectionChange(): void {
+    form.value.default_station_id = availableDefaultStations.value[0]?.id ?? null;
 }
 
 async function save(): Promise<void> {
@@ -65,6 +119,8 @@ async function save(): Promise<void> {
         password: form.value.password.trim() === '' ? undefined : form.value.password,
         role: form.value.role,
         is_active: form.value.is_active,
+        default_section: requiresDefaultAssignment.value ? form.value.default_section : null,
+        default_station_id: requiresDefaultAssignment.value ? form.value.default_station_id : null,
     };
 
     try {
@@ -103,7 +159,21 @@ async function remove(user: AdminUser): Promise<void> {
 }
 
 function emptyForm(): UserForm {
-    return { id: null, name: '', email: '', password: '', role: 'operator', is_active: true };
+    const section = sections.value[0]?.slug ?? '';
+    const station = stations.value.find(
+        (candidate) => candidate.is_active && candidate.section?.slug === section,
+    );
+
+    return {
+        id: null,
+        name: '',
+        email: '',
+        password: '',
+        role: 'operator',
+        is_active: true,
+        default_section: section,
+        default_station_id: station?.id ?? null,
+    };
 }
 
 function describeError(exception: unknown): string {
@@ -136,6 +206,29 @@ function describeError(exception: unknown): string {
                         <option v-for="role in ROLES" :key="role.value" :value="role.value">{{ role.label }}</option>
                     </select>
                 </label>
+
+                <div v-if="requiresDefaultAssignment" class="grid gap-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <p class="text-xs text-slate-500">
+                        Se preseleccionan al abrir la jornada. El operador puede cambiarlos manualmente cuando sea necesario.
+                    </p>
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Sección por defecto
+                        <select v-model="form.default_section" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" @change="onSectionChange">
+                            <option v-for="section in sections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                        Ventanilla por defecto
+                        <select v-model="form.default_station_id" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                            <option :value="null" disabled>Seleccione</option>
+                            <option v-for="station in availableDefaultStations" :key="station.id" :value="station.id">{{ station.name }}</option>
+                        </select>
+                    </label>
+                    <p v-if="availableDefaultStations.length === 0" class="text-xs text-amber-300">
+                        La sección seleccionada no tiene ventanillas activas.
+                    </p>
+                </div>
+
                 <label class="flex items-center gap-3 text-sm text-slate-300">
                     <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-700 bg-slate-950">
                     Usuario activo
@@ -162,6 +255,9 @@ function describeError(exception: unknown): string {
                         <h3 class="font-semibold">{{ user.name }}</h3>
                         <p class="text-sm text-slate-400">{{ user.email }}</p>
                         <p class="mt-1 text-xs uppercase tracking-wide text-slate-500">{{ user.role_label }}</p>
+                        <p v-if="user.role !== 'admin'" class="mt-2 text-sm text-slate-400">
+                            {{ user.default_section?.name ?? 'Sin sección' }} · {{ user.default_station?.name ?? 'Sin ventanilla' }}
+                        </p>
                     </div>
                     <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="user.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'">
                         {{ user.is_active ? 'Activo' : 'Inactivo' }}

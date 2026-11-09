@@ -72,11 +72,7 @@ onMounted(async () => {
     }
 
     await loadSections();
-
-    if (sections.value.length > 0) {
-        selectedSectionSlug.value = sections.value[0].slug;
-    }
-
+    selectedSectionSlug.value = preferredSectionSlug();
     await loadStations();
     await restoreSession();
 
@@ -93,24 +89,30 @@ onBeforeUnmount(() => {
     unsubscribe();
 });
 
-watch(selectedSectionSlug, async () => {
+watch(selectedStationId, (stationId) => {
+    if (session.value) {
+        changeStationId.value = stationId;
+    }
+});
+
+function preferredSectionSlug(): string {
+    const defaultSlug = currentUser.value?.default_section?.slug;
+
+    if (defaultSlug && sections.value.some((section) => section.slug === defaultSlug)) {
+        return defaultSlug;
+    }
+
+    return sections.value[0]?.slug ?? '';
+}
+
+async function onSectionChange(): Promise<void> {
     if (session.value) {
         return;
     }
 
     selectedStationId.value = null;
     await loadStations();
-
-    if (stations.value.length > 0) {
-        selectedStationId.value = stations.value[0].id;
-    }
-});
-
-watch(selectedStationId, (stationId) => {
-    if (session.value) {
-        changeStationId.value = stationId;
-    }
-});
+}
 
 async function loadSections(): Promise<void> {
     try {
@@ -145,9 +147,15 @@ async function loadStations(): Promise<void> {
         const response = await api.stations(selectedSectionSlug.value);
         stations.value = response.data;
 
-        if (stations.value.length > 0 && !stations.value.some((station) => station.id === selectedStationId.value)) {
-            selectedStationId.value = stations.value[0].id;
-        }
+        const defaultStationId = currentUser.value?.default_section?.slug === selectedSectionSlug.value
+            ? currentUser.value?.default_station?.id ?? null
+            : null;
+
+        const preferredStation = stations.value.find((station) => station.id === defaultStationId)
+            ?? stations.value.find((station) => station.id === selectedStationId.value)
+            ?? stations.value[0];
+
+        selectedStationId.value = preferredStation?.id ?? null;
     } catch (exception) {
         error.value = describeError(exception);
     }
@@ -494,6 +502,9 @@ function describeError(exception: unknown): string {
                 El operador queda vinculado a una sola sección durante la jornada. La ventanilla puede
                 cambiarse después, dejando historial.
             </p>
+            <p class="mt-2 text-sm text-slate-500">
+                Se cargan la sección y la ventanilla por defecto del operador; cámbielas solo si es necesario.
+            </p>
 
             <div class="mt-8 grid gap-5 sm:grid-cols-2">
                 <label class="flex flex-col gap-2 text-sm text-slate-300">
@@ -501,6 +512,7 @@ function describeError(exception: unknown): string {
                     <select
                         v-model="selectedSectionSlug"
                         class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+                        @change="onSectionChange"
                     >
                         <option v-for="section in sections" :key="section.slug" :value="section.slug">
                             {{ section.name }}

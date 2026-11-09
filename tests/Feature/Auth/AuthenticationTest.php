@@ -5,11 +5,14 @@ namespace Tests\Feature\Auth;
 use App\Domain\Users\UserRole;
 use App\Models\User;
 use PHPUnit\Framework\Attributes\Group;
+use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
 
 #[Group('t-auth')]
 class AuthenticationTest extends TestCase
 {
+    use SeedsTicketMatrix;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -117,6 +120,26 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('data.name', 'Supervisora')
             ->assertJsonPath('data.role', UserRole::Supervisor->value)
             ->assertJsonPath('data.is_active', true);
+    }
+
+    public function test_the_me_endpoint_returns_the_default_section_and_station(): void
+    {
+        $this->seedMatrix();
+
+        $section = $this->section('plataforma');
+        $station = $section->stations()->where('is_active', true)->firstOrFail();
+
+        $user = User::factory()->create([
+            'default_section_id' => $section->id,
+            'default_station_id' => $station->id,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.default_section.slug', 'plataforma')
+            ->assertJsonPath('data.default_station.id', $station->id)
+            ->assertJsonPath('data.default_station.name', $station->name);
     }
 
     public function test_an_inactive_user_is_blocked_from_the_api(): void

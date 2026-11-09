@@ -57,6 +57,8 @@ final class AuditLogger
             'email' => $user->email,
             'role' => $user->role->value,
             'is_active' => $user->is_active,
+            'default_section_id' => $user->default_section_id,
+            'default_station_id' => $user->default_station_id,
         ];
     }
 }

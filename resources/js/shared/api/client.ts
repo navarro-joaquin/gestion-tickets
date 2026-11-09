@@ -573,6 +573,8 @@ export interface AdminUserPayload {
     password?: string;
     role: string;
     is_active: boolean;
+    default_section?: string | null;
+    default_station_id?: number | null;
 }
 
 export interface KioskPayload {

@@ -223,6 +223,10 @@ class AdminCatalogTest extends TestCase
     {
         $this->seedMatrix();
         $admin = User::factory()->admin()->create();
+        $section = $this->section('plataforma');
+        $station = $section->stations()->where('is_active', true)->firstOrFail();
+        $otherSection = $this->section('odeco');
+        $otherStation = $otherSection->stations()->where('is_active', true)->firstOrFail();
 
         $created = $this->actingAs($admin)
             ->postJson('/api/v1/admin/users', [
@@ -231,9 +235,13 @@ class AdminCatalogTest extends TestCase
                 'password' => 'secret-password',
                 'role' => 'operator',
                 'is_active' => true,
+                'default_section' => $section->slug,
+                'default_station_id' => $station->id,
             ])
             ->assertCreated()
             ->assertJsonPath('data.role', 'operator')
+            ->assertJsonPath('data.default_section.slug', $section->slug)
+            ->assertJsonPath('data.default_station.id', $station->id)
             ->json('data');
 
         $this->actingAs($admin)
@@ -242,10 +250,14 @@ class AdminCatalogTest extends TestCase
                 'email' => 'nueva@example.test',
                 'role' => 'supervisor',
                 'is_active' => true,
+                'default_section' => $otherSection->slug,
+                'default_station_id' => $otherStation->id,
             ])
             ->assertOk()
             ->assertJsonPath('data.name', 'Nueva Supervisora')
-            ->assertJsonPath('data.role', 'supervisor');
+            ->assertJsonPath('data.role', 'supervisor')
+            ->assertJsonPath('data.default_section.slug', $otherSection->slug)
+            ->assertJsonPath('data.default_station.id', $otherStation->id);
 
         $this->actingAs($admin)
             ->putJson("/api/v1/admin/users/{$admin->id}", [
@@ -253,6 +265,8 @@ class AdminCatalogTest extends TestCase
                 'email' => $admin->email,
                 'role' => 'operator',
                 'is_active' => true,
+                'default_section' => $section->slug,
+                'default_station_id' => $station->id,
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['role']);
@@ -274,6 +288,63 @@ class AdminCatalogTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $admin->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'user.created']);
         $this->assertDatabaseHas('audit_logs', ['action' => 'user.updated']);
+    }
+
+    public function test_operator_requires_a_default_section_and_station(): void
+    {
+        $this->seedMatrix();
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/admin/users', [
+                'name' => 'Sin Asignación',
+                'email' => 'sin.asignacion@example.test',
+                'password' => 'secret-password',
+                'role' => 'operator',
+                'is_active' => true,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['default_section', 'default_station_id']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'sin.asignacion@example.test']);
+    }
+
+    public function test_operator_default_station_must_belong_to_the_default_section(): void
+    {
+        $this->seedMatrix();
+        $admin = User::factory()->admin()->create();
+        $station = $this->section('odeco')->stations()->where('is_active', true)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/admin/users', [
+                'name' => 'Asignación Cruzada',
+                'email' => 'cruzada@example.test',
+                'password' => 'secret-password',
+                'role' => 'operator',
+                'is_active' => true,
+                'default_section' => 'plataforma',
+                'default_station_id' => $station->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['default_station_id']);
+    }
+
+    public function test_admin_does_not_require_a_default_assignment(): void
+    {
+        $this->seedMatrix();
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/admin/users', [
+                'name' => 'Administradora',
+                'email' => 'admin.temporal@example.test',
+                'password' => 'secret-password',
+                'role' => 'admin',
+                'is_active' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.default_section', null)
+            ->assertJsonPath('data.default_station', null);
     }
 
     public function test_a_user_with_history_is_deactivated_instead_of_deleted(): void

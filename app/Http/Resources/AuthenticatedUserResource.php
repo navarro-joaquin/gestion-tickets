@@ -23,6 +23,14 @@ class AuthenticatedUserResource extends JsonResource
             'role' => $this->role->value,
             'role_label' => $this->role->label(),
             'is_active' => $this->is_active,
+            'default_section' => $this->defaultSection ? [
+                'slug' => $this->defaultSection->slug,
+                'name' => $this->defaultSection->name,
+            ] : null,
+            'default_station' => $this->defaultStation ? [
+                'id' => $this->defaultStation->id,
+                'name' => $this->defaultStation->name,
+            ] : null,
         ];
     }
 }

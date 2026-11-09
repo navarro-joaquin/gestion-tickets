@@ -421,6 +421,7 @@ Las tablas 1 a 4 están implementadas desde la Fase 1 (2026-11-06), las tablas 1
 
 - `role` varchar(20), por defecto `operator`; valores `admin`, `supervisor`, `operator`.
 - `is_active` boolean, por defecto `true`; un usuario inactivo no pasa el `Gate::before` de administración.
+- `default_section_id` FK `sections` nullable y `default_station_id` FK `stations` nullable; obligatorias para operadores y supervisores al crear o editar el usuario. La consola las preselecciona al abrir la jornada; el cambio manual sigue permitido cuando sea necesario.
 - Índice `role`.
 
 ### 9.6 `ticket_sequences`
@@ -1149,7 +1150,7 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Auditoría:** cada mutación de catálogos registra `action`, entidad, `before`, `after`, usuario e IP en `audit_logs`. La tabla es de solo inserción desde la aplicación.
 - **Secciones:** el nombre, estado y orden son editables; si la sección tiene tickets activos se bloquea la edición para no romper la operación en curso.
 - **Matriz:** solo se permite remapear las categorías de los tres códigos existentes. No se pueden crear códigos nuevos desde la interfaz; el cambio exige confirmación explícita y se valida con `SectionMatrixValidator`.
-- **Usuarios:** el alta y la edición usan `AdminUserRequest`; la baja es lógica (`is_active=false`) para conservar el historial de tickets y auditoría.
+- **Usuarios:** el alta y la edición usan `AdminUserRequest`; la baja es lógica (`is_active=false`) para conservar el historial de tickets y auditoría. Los operadores y supervisores declaran `default_section_id` y `default_station_id`; la ventanilla debe pertenecer a la sección y estar activa.
 - **Quioscos:** `kiosk_devices` guarda un token aleatorio de 48 caracteres y una lista de secciones activas. La URL pública es `/quiosco?quiosco={token}`. La emisión (`POST /api/v1/tickets`) exige ese token y que la sección solicitada esté habilitada para el quiosco.
 - **Impresoras:** cada impresora pertenece opcionalmente a una ventanilla y declara driver (`local` o `qz`), destino, ancho de papel y configuración adicional.
 - **Autorización:** todos los endpoints de administración exigen rol `admin`; la consola exige sesión y rol admin/supervisor/operador.
@@ -1173,6 +1174,14 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Audio:** el timbre se genera con Web Audio API (dos tonos) y la voz con `speechSynthesis`; no hay archivos de audio ni dependencias nuevas. El botón “Activar audio” desbloquea el contexto de audio y guarda la preferencia en `localStorage`.
 - **Privacidad:** la pantalla pública no recibe datos personales; solo código, número, ventanilla, estado y etiqueta de servicio del ticket.
 - **Endpoints:** `apiResource` de `/api/v1/admin/media`, `/api/v1/admin/playlists` y `/api/v1/admin/displays`; `POST /api/v1/admin/displays/{display}/token`; `GET /api/v1/display/snapshot?display={token}`.
+
+### 15.10 Sección y ventanilla por defecto del operador (2026-11-09)
+
+- **Columnas:** `users.default_section_id` y `users.default_station_id` son FKs nullable a `sections` y `stations`, con `nullOnDelete` para no bloquear bajas de catálogo.
+- **Validación:** al crear o editar un usuario con rol `operator` o `supervisor`, ambos campos son obligatorios. La sección debe estar activa y la ventanilla debe existir, estar activa y pertenecer a esa sección. Para `admin` se guardan en `null`.
+- **API:** `AdminUserResource` y `AuthenticatedUserResource` exponen `default_section` (`slug`, `name`) y `default_station` (`id`, `name`). El alta y la edición reciben `default_section` (slug) y `default_station_id`.
+- **Consola:** al abrir la jornada se preseleccionan la sección y la ventanilla por defecto del usuario autenticado. Si no existen o están inactivas, se usa la primera sección y ventanilla activas. El operador conserva la posibilidad de cambiarlas manualmente.
+- **Demostración:** `DemoOperatorSeeder` asigna Plataforma y su primera ventanilla activa a `operador@demo.local` cuando corre en `APP_ENV=local`.
 
 ---
 

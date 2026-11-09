@@ -55,6 +55,14 @@ export interface AuthUser {
     role: string;
     role_label: string;
     is_active: boolean;
+    default_section: {
+        slug: string;
+        name: string;
+    } | null;
+    default_station: {
+        id: number;
+        name: string;
+    } | null;
 }
 
 export interface TransferHistory {
@@ -339,6 +347,14 @@ export interface AdminUser {
     role: string;
     role_label: string;
     is_active: boolean;
+    default_section: {
+        slug: string;
+        name: string;
+    } | null;
+    default_station: {
+        id: number;
+        name: string;
+    } | null;
     created_at: string | null;
 }
 

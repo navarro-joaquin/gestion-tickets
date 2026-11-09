@@ -12,8 +12,10 @@ class AuthController extends Controller
 {
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user()->loadMissing(['defaultSection', 'defaultStation']);
+
         return response()->json([
-            'data' => new AuthenticatedUserResource($request->user()),
+            'data' => new AuthenticatedUserResource($user),
         ]);
     }
 
