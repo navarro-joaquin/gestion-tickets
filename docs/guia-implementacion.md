@@ -10,7 +10,7 @@
 
 Documentar cómo está montado el proyecto, cómo levantarlo y en qué orden implementar el sistema de generación y gestión de tickets descrito en el diseño técnico. Es un documento vivo: debe actualizarse cuando se cierren decisiones pendientes o cambie la infraestructura.
 
-Esta guía describe el estado real del repositorio. A la fecha están implementadas las fundaciones de secciones/categorías/matriz (Fase 1), el núcleo de emisión, llamado, atención y cierre de tickets (Fase 2), la operación con ventanillas, sesiones de operador, transferencias entre secciones y pantalla de llamados (Fase 3), y las prioridades con aging, los servicios exclusivos y la autenticación con roles (Fase 4). La administración completa, los reportes y la multimedia siguen pendientes (Fases 5 y 6).
+Esta guía describe el estado real del repositorio. A la fecha están implementadas las fases 1 a 6: fundaciones de secciones/categorías/matriz, núcleo de tickets, ventanillas y transferencias, prioridades y servicios, administración y auditoría, reportes y retención, multimedia y pantallas, y el endurecimiento de la Fase 6. **Pendiente de ejecución:** cargas en staging, simulacros de caos, restauración en producción, UAT y piloto real.
 
 ---
 
@@ -1045,9 +1045,9 @@ La concurrencia se ejecuta contra MySQL porque SQLite no reproduce el comportami
 - La consola abre una sesión por operador y exige una ventanilla; el cambio de ventanilla queda en `station_assignments`.
 - La pantalla `/pantalla` se suscribe a todas las secciones activas y muestra el último llamado y los anteriores.
 - Redis: instalado en la arquitectura objetivo pero no habilitado; caché, colas y sesiones usan base de datos en local.
-- Pendiente: healthchecks de aplicación y Reverb, Horizon, respaldos automatizados y purga a 12 meses.
+- Pendiente de operación: programar los respaldos (`scripts/backup.*`) en cron/systemd, configurar alertas de monitoreo y repetir la restauración en producción. Horizon y Redis no se adoptaron; la cola y la caché usan base de datos.
 - Respaldos locales con `mysqldump`; en producción, binlog + copia externa cifrada.
-- RPO/RTO propuestos: 15 minutos / 2 horas, sujetos a validación.
+- RPO/RTO propuestos: 24 horas / 2 horas, sujetos a aprobación de la institución.
 
 ---
 
