@@ -4,6 +4,7 @@ import { api } from '../../shared/api/client';
 import { TicketAnnouncer } from '../../shared/audio/announcer';
 import { getEcho } from '../../shared/echo';
 import type { DisplaySnapshot, MediaAsset, MediaItem, Ticket } from '../../shared/types/api';
+import CallHistory from './components/CallHistory.vue';
 import MediaStage from './components/MediaStage.vue';
 import QueueBoard from './components/QueueBoard.vue';
 
@@ -29,6 +30,7 @@ let pollingTimer: ReturnType<typeof setInterval> | undefined;
 let clockTimer: ReturnType<typeof setInterval> | undefined;
 
 const sections = computed(() => snapshot.value?.data ?? []);
+const recentTickets = computed<Ticket[]>(() => snapshot.value?.recent ?? []);
 const display = computed(() => snapshot.value?.display ?? null);
 const layout = computed(() => display.value?.layout ?? 'queue');
 
@@ -246,12 +248,18 @@ function subscribeToSections(): void {
         </header>
 
         <section class="flex-1 px-10 py-8">
-            <QueueBoard v-if="layout === 'queue'" :sections="sections" />
-
-            <div v-else-if="layout === 'mixed'" class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <QueueBoard :sections="sections" compact />
-                <MediaStage :items="mediaItems" />
+            <div v-if="layout === 'queue'">
+                <QueueBoard :sections="sections" />
+                <CallHistory :tickets="recentTickets" />
             </div>
+
+            <template v-else-if="layout === 'mixed'">
+                <div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                    <QueueBoard :sections="sections" compact />
+                    <MediaStage :items="mediaItems" />
+                </div>
+                <CallHistory :tickets="recentTickets" />
+            </template>
 
             <div v-else class="h-full min-h-[32rem]">
                 <MediaStage :items="mediaItems" />

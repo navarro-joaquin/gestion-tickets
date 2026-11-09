@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Displays\Display;
 use App\Domain\Sections\Section;
 use App\Domain\Ticketing\Ticket;
+use App\Domain\Ticketing\TicketStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlaylistResource;
 use App\Http\Resources\TicketResource;
@@ -53,6 +54,20 @@ class DisplayController extends Controller
             ->groupBy('current_section_id')
             ->pluck('total', 'current_section_id');
 
+        $recentTickets = Ticket::query()
+            ->forPeriod(now())
+            ->whereIn('current_section_id', $sections->pluck('id'))
+            ->whereIn('status', [
+                TicketStatus::Called,
+                TicketStatus::InService,
+                TicketStatus::Finished,
+            ])
+            ->with(['section', 'currentSection', 'category'])
+            ->orderByRaw('COALESCE(finished_at, called_at) DESC')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
         return response()->json([
             'data' => $sections->map(fn (Section $section): array => [
                 'section' => [
@@ -64,6 +79,9 @@ class DisplayController extends Controller
                     ->map(fn (Ticket $ticket): TicketResource => new TicketResource($ticket))
                     ->values(),
             ])->values(),
+            'recent' => $recentTickets
+                ->map(fn (Ticket $ticket): TicketResource => new TicketResource($ticket))
+                ->values(),
             'display' => $display === null ? null : [
                 'id' => $display->id,
                 'name' => $display->name,

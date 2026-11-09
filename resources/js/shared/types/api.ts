@@ -191,6 +191,7 @@ export interface DisplaySnapshot {
         waiting_count: number;
         calling: Ticket[];
     }>;
+    recent: Ticket[];
     display: DisplaySummary | null;
     playlists: Playlist[];
     updated_at: string;
