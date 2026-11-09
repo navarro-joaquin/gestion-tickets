@@ -26,6 +26,9 @@ const changeStationId = ref<number | null>(null);
 const transferSectionSlug = ref('');
 const transferReason = ref('');
 
+const editingAssignment = ref(false);
+const editingStation = ref(false);
+
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
@@ -38,6 +41,19 @@ const activeTicket = computed<Ticket | null>(() => queue.value?.active_ticket ??
 const waitingCount = computed<number>(() => queue.value?.waiting_count ?? 0);
 const currentStationName = computed<string>(() => session.value?.station?.name ?? '');
 const sessionStations = computed<Station[]>(() => queue.value?.stations ?? stations.value);
+
+const hasDefaultAssignment = computed<boolean>(
+    () => Boolean(currentUser.value?.default_section && currentUser.value?.default_station),
+);
+const showAssignmentForm = computed<boolean>(
+    () => !hasDefaultAssignment.value || editingAssignment.value,
+);
+const selectedSectionName = computed<string>(
+    () => sections.value.find((section) => section.slug === selectedSectionSlug.value)?.name ?? '—',
+);
+const selectedStationName = computed<string>(
+    () => stations.value.find((station) => station.id === selectedStationId.value)?.name ?? '—',
+);
 
 const canRecall = computed<boolean>(
     () => activeTicket.value?.status === 'called' && activeTicket.value.call_count < 2,
@@ -94,6 +110,22 @@ function preferredSectionSlug(): string {
     }
 
     return sections.value[0]?.slug ?? '';
+}
+
+async function restoreDefaultAssignment(): Promise<void> {
+    selectedSectionSlug.value = preferredSectionSlug();
+    await loadStations();
+    editingAssignment.value = false;
+}
+
+function startStationChange(): void {
+    changeStationId.value = session.value?.station?.id ?? null;
+    editingStation.value = true;
+}
+
+function cancelStationChange(): void {
+    changeStationId.value = session.value?.station?.id ?? null;
+    editingStation.value = false;
 }
 
 async function onSectionChange(): Promise<void> {
@@ -197,6 +229,7 @@ async function openSession(): Promise<void> {
         message.value = response.message;
     } catch (exception) {
         error.value = describeError(exception);
+        editingAssignment.value = true;
     } finally {
         busy.value = false;
     }
@@ -207,6 +240,7 @@ async function useSession(activeSession: OperatorSession): Promise<void> {
     selectedSectionSlug.value = activeSession.section?.slug ?? '';
     selectedStationId.value = activeSession.station?.id ?? null;
     changeStationId.value = activeSession.station?.id ?? null;
+    editingStation.value = false;
     localStorage.setItem(SESSION_STORAGE_KEY, String(activeSession.id));
 
     if (activeSession.section?.slug) {
@@ -234,6 +268,7 @@ async function closeSession(): Promise<void> {
         unsubscribe();
         session.value = null;
         queue.value = null;
+        await restoreDefaultAssignment();
     } catch (exception) {
         error.value = describeError(exception);
     } finally {
@@ -254,6 +289,8 @@ async function changeStation(): Promise<void> {
         const response = await api.changeStation(session.value.id, changeStationId.value);
         session.value = response.data;
         selectedStationId.value = response.data.station?.id ?? null;
+        changeStationId.value = response.data.station?.id ?? null;
+        editingStation.value = false;
         message.value = response.message;
         await loadQueue();
     } catch (exception) {
@@ -417,46 +454,96 @@ function describeError(exception: unknown): string {
                 El operador queda vinculado a una sola sección durante la jornada. La ventanilla puede
                 cambiarse después, dejando historial.
             </p>
-            <p class="mt-2 text-sm text-slate-500">
-                Se cargan la sección y la ventanilla por defecto del operador; cámbielas solo si es necesario.
-            </p>
 
-            <div class="mt-8 grid gap-5 sm:grid-cols-2">
-                <label class="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                    Sección
-                    <select
-                        v-model="selectedSectionSlug"
-                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                        @change="onSectionChange"
+            <template v-if="!showAssignmentForm">
+                <p class="mt-2 text-sm text-slate-500">
+                    Se usarán la sección y la ventanilla registradas en su usuario.
+                </p>
+
+                <div class="mt-8 grid gap-4 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Sección</p>
+                        <p class="mt-1 text-lg font-semibold text-slate-900">{{ selectedSectionName }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Ventanilla</p>
+                        <p class="mt-1 text-lg font-semibold text-slate-900">{{ selectedStationName }}</p>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        class="rounded-xl bg-accent-300 px-6 py-3 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        :disabled="busy"
+                        @click="openSession"
                     >
-                        <option v-for="section in sections" :key="section.slug" :value="section.slug">
-                            {{ section.name }}
-                        </option>
-                    </select>
-                </label>
-
-                <label class="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                    Ventanilla
-                    <select
-                        v-model="selectedStationId"
-                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                        {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        :disabled="busy"
+                        @click="editingAssignment = true"
                     >
-                        <option :value="null" disabled>Seleccione</option>
-                        <option v-for="station in stations" :key="station.id" :value="station.id">
-                            {{ station.name }}
-                        </option>
-                    </select>
-                </label>
-            </div>
+                        Cambiar sección o ventanilla
+                    </button>
+                </div>
+            </template>
 
-            <button
-                type="button"
-                class="mt-8 rounded-xl bg-accent-300 px-6 py-3 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                :disabled="busy"
-                @click="openSession"
-            >
-                {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
-            </button>
+            <template v-else>
+                <p class="mt-2 text-sm text-slate-500">
+                    {{ hasDefaultAssignment ? 'Seleccione otra sección o ventanilla para esta jornada.' : 'Su usuario no tiene sección ni ventanilla por defecto: selecciónelas para abrir la jornada.' }}
+                </p>
+
+                <div class="mt-8 grid gap-5 sm:grid-cols-2">
+                    <label class="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                        Sección
+                        <select
+                            v-model="selectedSectionSlug"
+                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                            @change="onSectionChange"
+                        >
+                            <option v-for="section in sections" :key="section.slug" :value="section.slug">
+                                {{ section.name }}
+                            </option>
+                        </select>
+                    </label>
+
+                    <label class="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                        Ventanilla
+                        <select
+                            v-model="selectedStationId"
+                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                        >
+                            <option :value="null" disabled>Seleccione</option>
+                            <option v-for="station in stations" :key="station.id" :value="station.id">
+                                {{ station.name }}
+                            </option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="mt-8 flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        class="rounded-xl bg-accent-300 px-6 py-3 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        :disabled="busy"
+                        @click="openSession"
+                    >
+                        {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
+                    </button>
+                    <button
+                        v-if="hasDefaultAssignment"
+                        type="button"
+                        class="rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        :disabled="busy"
+                        @click="restoreDefaultAssignment"
+                    >
+                        Usar mis valores por defecto
+                    </button>
+                </div>
+            </template>
         </section>
 
         <section v-else class="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[2fr_1fr]">
@@ -555,24 +642,52 @@ function describeError(exception: unknown): string {
             <aside class="space-y-4">
                 <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h2 class="text-lg font-semibold">Ventanilla</h2>
-                    <div class="mt-4 flex flex-col gap-3">
-                        <select
-                            v-model="changeStationId"
-                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                        >
-                            <option v-for="station in sessionStations" :key="station.id" :value="station.id">
-                                {{ station.name }}
-                            </option>
-                        </select>
+
+                    <template v-if="!editingStation">
+                        <p class="mt-4 text-2xl font-semibold text-slate-900">
+                            {{ currentStationName || 'Sin asignar' }}
+                        </p>
                         <button
                             type="button"
-                            class="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                            :disabled="busy || changeStationId === session.station?.id"
-                            @click="changeStation"
+                            class="mt-4 rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                            :disabled="busy"
+                            @click="startStationChange"
                         >
-                            Cambiar ventanilla
+                            Cambiar
                         </button>
-                    </div>
+                    </template>
+
+                    <template v-else>
+                        <div class="mt-4 flex flex-col gap-3">
+                            <select
+                                v-model="changeStationId"
+                                class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                            >
+                                <option v-for="station in sessionStations" :key="station.id" :value="station.id">
+                                    {{ station.name }}
+                                </option>
+                            </select>
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    class="rounded-xl bg-accent-300 px-4 py-2 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                                    :disabled="busy || changeStationId === session.station?.id"
+                                    @click="changeStation"
+                                >
+                                    Confirmar cambio
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                                    :disabled="busy"
+                                    @click="cancelStationChange"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+
                     <p class="mt-4 text-xs text-slate-500">
                         El cambio queda registrado en el historial de la sesión.
                     </p>
