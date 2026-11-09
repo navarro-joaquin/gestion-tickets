@@ -6,6 +6,7 @@ use App\Domain\Operations\OperatorSession;
 use App\Domain\Operations\Station;
 use App\Domain\Operations\StationAssignment;
 use App\Domain\Ticketing\Ticket;
+use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,13 @@ final class ChangeOperatorStation
                 'station_id' => $station->id,
                 'assigned_at' => $now,
             ]);
+
+            User::query()
+                ->whereKey($session->operator_id)
+                ->update([
+                    'default_section_id' => $session->section_id,
+                    'default_station_id' => $station->id,
+                ]);
 
             return $session->load(['operator', 'section', 'activeAssignment.station']);
         });

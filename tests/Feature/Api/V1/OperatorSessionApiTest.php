@@ -92,6 +92,46 @@ class OperatorSessionApiTest extends TestCase
             ->assertJsonPath('message', 'Sesión de operador cerrada.');
     }
 
+    public function test_station_change_updates_the_operator_default_station(): void
+    {
+        $this->seedMatrix();
+
+        $section = $this->section('plataforma');
+        $stations = Station::query()
+            ->where('section_id', $section->id)
+            ->orderBy('sort_order')
+            ->get();
+
+        $operator = User::factory()->create([
+            'default_section_id' => $section->id,
+            'default_station_id' => $stations[0]->id,
+        ]);
+
+        $this->actingAs($operator);
+
+        $created = $this->postJson('/api/v1/console/session', [
+            'section' => 'plataforma',
+            'station_id' => $stations[0]->id,
+        ])->assertCreated()->json('data');
+
+        $this->patchJson("/api/v1/console/session/{$created['id']}/station", [
+            'station_id' => $stations[1]->id,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.station.name', 'Ventanilla 2');
+
+        $operator->refresh();
+
+        $this->assertSame($section->id, $operator->default_section_id);
+        $this->assertSame($stations[1]->id, $operator->default_station_id);
+
+        $this->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.default_section.slug', 'plataforma')
+            ->assertJsonPath('data.default_station.id', $stations[1]->id)
+            ->assertJsonPath('data.default_station.name', 'Ventanilla 2');
+    }
+
     public function test_open_session_rejects_a_station_from_another_section(): void
     {
         $this->seedMatrix();
