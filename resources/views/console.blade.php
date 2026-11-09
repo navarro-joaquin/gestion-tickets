@@ -6,7 +6,7 @@
     <title>Consola · CESSA Gestión de Tickets</title>
     @vite(['resources/css/app.css', 'resources/js/apps/console/main.ts'])
 </head>
-<body class="bg-brand-950">
+<body class="bg-slate-100">
     <div id="console"></div>
 </body>
 </html>
