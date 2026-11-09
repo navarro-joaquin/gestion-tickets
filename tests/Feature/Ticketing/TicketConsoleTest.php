@@ -56,6 +56,55 @@ class TicketConsoleTest extends TestCase
         $this->assertNull($called);
     }
 
+    public function test_call_next_ignores_waiting_tickets_from_previous_days(): void
+    {
+        $this->seedMatrix();
+        $section = $this->section('plataforma');
+
+        $previousDay = Ticket::factory()
+            ->forMatrix(
+                $section,
+                $section->ticketCodes()->where('is_active', true)->firstOrFail(),
+                $this->category('general'),
+            )
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'status' => TicketStatus::Waiting,
+            ]);
+
+        $called = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1');
+
+        $this->assertNull($called);
+        $this->assertSame(TicketStatus::Waiting, $previousDay->fresh()->status);
+    }
+
+    public function test_call_next_takes_todays_ticket_when_a_previous_day_ticket_is_still_waiting(): void
+    {
+        $this->seedMatrix();
+        $section = $this->section('plataforma');
+
+        $previousDay = Ticket::factory()
+            ->forMatrix(
+                $section,
+                $section->ticketCodes()->where('is_active', true)->firstOrFail(),
+                $this->category('general'),
+            )
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'status' => TicketStatus::Waiting,
+            ]);
+
+        $today = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $called = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1');
+
+        $this->assertNotNull($called);
+        $this->assertSame($today->id, $called->id);
+        $this->assertSame(TicketStatus::Waiting, $previousDay->fresh()->status);
+    }
+
     public function test_a_station_cannot_have_two_active_tickets(): void
     {
         $this->seedMatrix();

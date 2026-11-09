@@ -40,6 +40,7 @@ class DisplayController extends Controller
 
         $activeTickets = Ticket::query()
             ->active()
+            ->forPeriod(now())
             ->with(['section', 'currentSection', 'category'])
             ->orderBy('called_at')
             ->get()
@@ -47,6 +48,7 @@ class DisplayController extends Controller
 
         $waitingCounts = Ticket::query()
             ->waiting()
+            ->forPeriod(now())
             ->selectRaw('current_section_id, count(*) as total')
             ->groupBy('current_section_id')
             ->pluck('total', 'current_section_id');

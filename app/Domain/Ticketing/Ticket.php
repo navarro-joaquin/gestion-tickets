@@ -8,6 +8,7 @@ use App\Domain\Sections\Section;
 use App\Domain\Sections\SectionTicketCode;
 use App\Domain\Services\Service;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\Domain\Ticketing\TicketFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -165,6 +166,15 @@ class Ticket extends Model
     protected function active(Builder $query): Builder
     {
         return $query->whereIn('status', [TicketStatus::Called, TicketStatus::InService]);
+    }
+
+    #[Scope]
+    protected function forPeriod(Builder $query, CarbonInterface|string $date): Builder
+    {
+        return $query->where(
+            'period_key',
+            $date instanceof CarbonInterface ? $date->toDateString() : $date,
+        );
     }
 
     #[Scope]

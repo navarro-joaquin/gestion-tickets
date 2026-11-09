@@ -44,11 +44,13 @@ class ConsoleController extends Controller
         $stationLabel = $validated['station']
             ?? $session?->activeAssignment?->station?->name;
 
+        $today = now();
         $activeTicket = null;
 
         if ($stationLabel !== null && $stationLabel !== '') {
             $activeTicket = Ticket::query()
                 ->active()
+                ->forPeriod($today)
                 ->where('current_section_id', $section->id)
                 ->where('station_label', $stationLabel)
                 ->with(['section', 'currentSection', 'category', 'service'])
@@ -63,6 +65,7 @@ class ConsoleController extends Controller
                 ],
                 'waiting_count' => Ticket::query()
                     ->waiting()
+                    ->forPeriod($today)
                     ->where('current_section_id', $section->id)
                     ->count(),
                 'active_ticket' => $activeTicket ? new TicketResource($activeTicket) : null,

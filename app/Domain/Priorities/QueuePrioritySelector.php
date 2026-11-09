@@ -29,7 +29,7 @@ final class QueuePrioritySelector
         $preferentialCalls = $calls['preferential'];
         $consecutivePreferential = $this->consecutivePreferentialCalls($section, $moment, $profile);
 
-        $base = $this->waitingQuery($section, $operator);
+        $base = $this->waitingQuery($section, $moment, $operator);
 
         $oldestGeneral = (clone $base)
             ->where('is_preferential', false)
@@ -182,10 +182,11 @@ final class QueuePrioritySelector
         return $consecutive;
     }
 
-    private function waitingQuery(Section $section, ?User $operator): Builder
+    private function waitingQuery(Section $section, CarbonInterface $moment, ?User $operator): Builder
     {
         $query = Ticket::query()
             ->waiting()
+            ->forPeriod($moment)
             ->where('current_section_id', $section->id);
 
         if ($operator !== null) {

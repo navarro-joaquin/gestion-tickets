@@ -6,6 +6,8 @@ use App\Domain\Kiosks\KioskDevice;
 use App\Domain\Operations\Station;
 use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\IssueTicket;
+use App\Domain\Ticketing\Ticket;
+use App\Domain\Ticketing\TicketStatus;
 use App\Models\User;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
@@ -181,6 +183,56 @@ class TicketApiTest extends TestCase
             ->assertJsonPath('data.active_ticket.label', 'A-001');
     }
 
+    public function test_console_queue_ignores_waiting_tickets_from_previous_days(): void
+    {
+        $this->seedMatrix();
+        $section = $this->section('plataforma');
+
+        Ticket::factory()
+            ->forMatrix(
+                $section,
+                $section->ticketCodes()->where('is_active', true)->firstOrFail(),
+                $this->category('general'),
+            )
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'status' => TicketStatus::Waiting,
+            ]);
+
+        app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->actingAs(User::factory()->create())
+            ->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201')
+            ->assertOk()
+            ->assertJsonPath('data.waiting_count', 1);
+    }
+
+    public function test_console_queue_ignores_active_tickets_from_previous_days(): void
+    {
+        $this->seedMatrix();
+        $section = $this->section('plataforma');
+
+        Ticket::factory()
+            ->called('Ventanilla 1')
+            ->forMatrix(
+                $section,
+                $section->ticketCodes()->where('is_active', true)->firstOrFail(),
+                $this->category('general'),
+            )
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'called_at' => now()->subDay(),
+            ]);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson('/api/v1/console/queue?section=plataforma&station=Ventanilla%201')
+            ->assertOk()
+            ->assertJsonPath('data.waiting_count', 0)
+            ->assertJsonPath('data.active_ticket', null);
+    }
+
     public function test_next_endpoint_returns_null_when_there_are_no_waiting_tickets(): void
     {
         $this->seedMatrix();
@@ -221,6 +273,39 @@ class TicketApiTest extends TestCase
             ->assertJsonPath('data.0.waiting_count', 1)
             ->assertJsonPath('data.0.calling.0.label', 'A-001')
             ->assertJsonPath('data.0.calling.0.status', 'called');
+    }
+
+    public function test_display_snapshot_ignores_tickets_from_previous_days(): void
+    {
+        $this->seedMatrix();
+        $section = $this->section('plataforma');
+
+        $ticketCode = $section->ticketCodes()->where('is_active', true)->firstOrFail();
+        $category = $this->category('general');
+
+        Ticket::factory()
+            ->forMatrix($section, $ticketCode, $category)
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'status' => TicketStatus::Waiting,
+            ]);
+
+        Ticket::factory()
+            ->called('Ventanilla 2')
+            ->forMatrix($section, $ticketCode, $category)
+            ->create([
+                'period_key' => now()->subDay()->toDateString(),
+                'issued_at' => now()->subDay(),
+                'called_at' => now()->subDay(),
+            ]);
+
+        app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->getJson('/api/v1/display/snapshot')
+            ->assertOk()
+            ->assertJsonPath('data.0.waiting_count', 1)
+            ->assertJsonCount(0, 'data.0.calling');
     }
 
     private function station(string $sectionSlug): Station

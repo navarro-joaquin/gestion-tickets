@@ -1182,6 +1182,14 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Consola:** al abrir la jornada se preseleccionan la sección y la ventanilla por defecto del usuario autenticado. Si no existen o están inactivas, se usa la primera sección y ventanilla activas. El operador conserva la posibilidad de cambiarlas manualmente.
 - **Demostración:** `DemoOperatorSeeder` asigna Plataforma y su primera ventanilla activa a `operador@demo.local` cuando corre en `APP_ENV=local`.
 
+### 15.11 Atención limitada a la jornada actual (2026-11-09)
+
+- **Consola:** solo se llaman tickets `waiting` cuyo `period_key` coincide con la fecha del llamado. Los tickets en espera de jornadas anteriores no se seleccionan ni se cuentan en `waiting_count`; tampoco se muestran como ticket activo si quedaron con un estado activo de otro día.
+- **Pantallas:** el snapshot público aplica el mismo filtro por período a los llamados y a los conteos en espera.
+- **Implementación:** scope `Ticket::forPeriod()` en `QueuePrioritySelector::waitingQuery()`, `ConsoleController::queue()` y `DisplayController::snapshot()`.
+- **Tickets viejos en espera:** el cierre de jornada no modifica los tickets de períodos anteriores; quedan como historial en `waiting` y dejan de bloquear la atención del día. Su depuración requiere una tarea manual o una política específica.
+- **Validación de ticket activo:** las comprobaciones de ventanilla y operador siguen siendo globales porque los índices únicos `active_station_key` y `active_operator_key` no distinguen período. Un ticket activo de una jornada anterior debe resolverse con el cierre de jornada antes de volver a usar esa ventanilla.
+
 ---
 
 ## 16. Primeros pasos concretos
