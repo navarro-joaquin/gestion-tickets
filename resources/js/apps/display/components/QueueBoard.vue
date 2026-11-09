@@ -6,12 +6,24 @@ const props = defineProps<{
     compact?: boolean;
 }>();
 
+function calledTickets(tickets: Ticket[]): Ticket[] {
+    return tickets.filter((ticket) => ticket.status === 'called');
+}
+
+function inServiceTickets(tickets: Ticket[]): Ticket[] {
+    return tickets.filter((ticket) => ticket.status === 'in_service');
+}
+
 function lastCall(tickets: Ticket[]): Ticket | null {
-    return tickets.length > 0 ? tickets[tickets.length - 1] : null;
+    const called = calledTickets(tickets);
+
+    return called.length > 0 ? called[called.length - 1] : null;
 }
 
 function previousCalls(tickets: Ticket[]): Ticket[] {
-    return tickets.length <= 1 ? [] : tickets.slice(0, -1).reverse();
+    const called = calledTickets(tickets);
+
+    return called.length <= 1 ? [] : called.slice(0, -1).reverse();
 }
 </script>
 
@@ -65,6 +77,21 @@ function previousCalls(tickets: Ticket[]): Ticket[] {
                 class="mt-8 flex flex-1 items-center justify-center rounded-3xl border border-dashed border-brand-800 p-10 text-center text-2xl text-slate-500"
             >
                 Espere su llamado
+            </div>
+
+            <div
+                v-if="inServiceTickets(section.calling).length > 0"
+                class="mt-6 space-y-2 border-t border-brand-800 pt-6"
+            >
+                <p class="text-sm uppercase tracking-[0.2em] text-accent-200">En atención</p>
+                <div
+                    v-for="ticket in inServiceTickets(section.calling)"
+                    :key="ticket.id"
+                    class="flex items-center justify-between rounded-xl bg-brand-950/70 px-4 py-3"
+                >
+                    <span class="text-2xl font-bold">{{ ticket.label }}</span>
+                    <span class="text-lg text-slate-400">{{ ticket.station_label }}</span>
+                </div>
             </div>
         </article>
     </div>
