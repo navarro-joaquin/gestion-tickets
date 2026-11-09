@@ -68,7 +68,7 @@ function schedule(): void {
 </script>
 
 <template>
-    <div class="relative flex h-full min-h-[24rem] flex-col overflow-hidden rounded-[2rem] border border-slate-800 bg-black">
+    <div class="relative flex h-full min-h-[24rem] flex-col overflow-hidden rounded-[2rem] border border-brand-800 bg-black">
         <div v-if="current && current.media" class="relative flex flex-1 items-center justify-center">
             <video
                 v-if="current.media.type === 'video'"
@@ -89,7 +89,7 @@ function schedule(): void {
             >
 
             <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-6 pb-4 pt-12">
-                <p class="text-sm uppercase tracking-[0.3em] text-sky-300">{{ current.playlist }}</p>
+                <p class="text-sm uppercase tracking-[0.3em] text-accent-300">{{ current.playlist }}</p>
                 <p class="text-xl font-semibold text-white">{{ current.media.name }}</p>
             </div>
         </div>
@@ -102,13 +102,13 @@ function schedule(): void {
             <p class="text-sm">Asigne una playlist con contenidos activos a esta pantalla.</p>
         </div>
 
-        <div v-if="props.items.length > 1" class="flex items-center justify-center gap-2 bg-slate-950/80 py-3">
+        <div v-if="props.items.length > 1" class="flex items-center justify-center gap-2 bg-brand-950/85 py-3">
             <button
                 v-for="(item, position) in props.items"
                 :key="`${item.media.id}-${position}`"
                 type="button"
                 class="h-2 rounded-full transition-all"
-                :class="position === index % props.items.length ? 'w-8 bg-sky-400' : 'w-2 bg-slate-700'"
+                :class="position === index % props.items.length ? 'w-8 bg-accent-300' : 'w-2 bg-brand-700'"
                 :aria-label="`Ver ${item.media.name}`"
                 @click="index = position; schedule()"
             />

@@ -202,10 +202,10 @@ function formatSize(bytes: number | null): string {
 
 function statusClass(status: ReportExport['status']): string {
     return {
-        queued: 'bg-amber-500/15 text-amber-200',
-        processing: 'bg-sky-500/15 text-sky-200',
-        completed: 'bg-emerald-500/15 text-emerald-200',
-        failed: 'bg-red-500/15 text-red-200',
+        queued: 'bg-amber-100 text-amber-800',
+        processing: 'bg-brand-50 text-brand-800',
+        completed: 'bg-emerald-100 text-emerald-800',
+        failed: 'bg-red-100 text-red-800',
     }[status];
 }
 
@@ -233,40 +233,40 @@ function describeError(exception: unknown): string {
 
 <template>
     <section class="mt-8 space-y-6">
-        <form class="rounded-3xl border border-slate-800 bg-slate-900 p-6" @submit.prevent="applyFilters">
+        <form class="rounded-3xl border border-slate-200 bg-white p-6" @submit.prevent="applyFilters">
             <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Desde
-                    <input v-model="filters.from" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <input v-model="filters.from" type="date" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Hasta
-                    <input v-model="filters.to" type="date" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <input v-model="filters.to" type="date" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Sección
-                    <select v-model="filters.section" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" @change="filters.station = ''; filters.service = ''">
+                    <select v-model="filters.section" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3" @change="filters.station = ''; filters.service = ''">
                         <option value="">Todas</option>
                         <option v-for="section in sections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
                     </select>
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Categoría
-                    <select v-model="filters.category" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <select v-model="filters.category" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         <option value="">Todas</option>
                         <option v-for="category in categories()" :key="category.slug" :value="category.slug">{{ category.name }}</option>
                     </select>
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Servicio
-                    <select v-model="filters.service" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <select v-model="filters.service" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         <option value="">Todos</option>
                         <option v-for="service in visibleServices()" :key="service.id" :value="service.slug">{{ service.name }}</option>
                     </select>
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Ventanilla
-                    <select v-model="filters.station" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <select v-model="filters.station" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         <option value="">Todas</option>
                         <option v-for="station in visibleStations()" :key="station.id" :value="station.name">{{ station.name }}</option>
                     </select>
@@ -274,47 +274,47 @@ function describeError(exception: unknown): string {
             </div>
 
             <div class="mt-4 flex flex-wrap gap-3">
-                <button type="submit" class="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-slate-950 disabled:opacity-50" :disabled="busy">
+                <button type="submit" class="rounded-xl bg-brand-700 px-5 py-3 font-semibold text-white disabled:opacity-50" :disabled="busy">
                     Aplicar filtros
                 </button>
-                <button type="button" class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 disabled:opacity-50" :disabled="busy" @click="requestExport">
+                <button type="button" class="rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-800 disabled:opacity-50" :disabled="busy" @click="requestExport">
                     Exportar CSV
                 </button>
             </div>
         </form>
 
-        <p v-if="message" class="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200">{{ message }}</p>
-        <p v-if="error" class="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">{{ error }}</p>
+        <p v-if="message" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{{ message }}</p>
+        <p v-if="error" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{{ error }}</p>
 
         <div v-if="summary" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">Emitidos</p>
                 <p class="mt-2 text-3xl font-semibold">{{ summary.totals.issued }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">Finalizados</p>
-                <p class="mt-2 text-3xl font-semibold text-emerald-300">{{ summary.totals.finished }}</p>
+                <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ summary.totals.finished }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">No presentados</p>
-                <p class="mt-2 text-3xl font-semibold text-amber-300">{{ summary.totals.no_show }}</p>
+                <p class="mt-2 text-3xl font-semibold text-amber-700">{{ summary.totals.no_show }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">Expirados</p>
-                <p class="mt-2 text-3xl font-semibold text-red-300">{{ summary.totals.expired }}</p>
+                <p class="mt-2 text-3xl font-semibold text-red-700">{{ summary.totals.expired }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">Espera promedio</p>
                 <p class="mt-2 text-3xl font-semibold">{{ formatDuration(summary.totals.avg_wait_seconds) }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <p class="text-xs uppercase tracking-wide text-slate-500">Atención promedio</p>
                 <p class="mt-2 text-3xl font-semibold">{{ formatDuration(summary.totals.avg_service_seconds) }}</p>
             </article>
         </div>
 
         <div v-if="summary" class="grid gap-6 xl:grid-cols-2">
-            <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <article class="rounded-3xl border border-slate-200 bg-white p-6">
                 <h3 class="font-semibold">Por sección</h3>
                 <table class="mt-4 min-w-full text-sm">
                     <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -326,9 +326,9 @@ function describeError(exception: unknown): string {
                             <th class="py-2">Espera</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800">
+                    <tbody class="divide-y divide-slate-200">
                         <tr v-for="row in summary.by_section" :key="row.section.id">
-                            <td class="py-2 text-slate-200">{{ row.section.name }}</td>
+                            <td class="py-2 text-slate-800">{{ row.section.name }}</td>
                             <td class="py-2">{{ row.issued }}</td>
                             <td class="py-2">{{ row.finished }}</td>
                             <td class="py-2">{{ row.no_show }}</td>
@@ -338,7 +338,7 @@ function describeError(exception: unknown): string {
                 </table>
             </article>
 
-            <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <article class="rounded-3xl border border-slate-200 bg-white p-6">
                 <h3 class="font-semibold">Por categoría</h3>
                 <table class="mt-4 min-w-full text-sm">
                     <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -350,9 +350,9 @@ function describeError(exception: unknown): string {
                             <th class="py-2">Espera</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800">
+                    <tbody class="divide-y divide-slate-200">
                         <tr v-for="row in summary.by_category" :key="row.category.id">
-                            <td class="py-2 text-slate-200">{{ row.category.name }}</td>
+                            <td class="py-2 text-slate-800">{{ row.category.name }}</td>
                             <td class="py-2">{{ row.issued }}</td>
                             <td class="py-2">{{ row.finished }}</td>
                             <td class="py-2">{{ row.no_show }}</td>
@@ -362,7 +362,7 @@ function describeError(exception: unknown): string {
                 </table>
             </article>
 
-            <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <article class="rounded-3xl border border-slate-200 bg-white p-6">
                 <h3 class="font-semibold">Por servicio</h3>
                 <table class="mt-4 min-w-full text-sm">
                     <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -374,9 +374,9 @@ function describeError(exception: unknown): string {
                             <th class="py-2">Espera</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800">
+                    <tbody class="divide-y divide-slate-200">
                         <tr v-for="row in summary.by_service" :key="row.service.id ?? 'none'">
-                            <td class="py-2 text-slate-200">{{ serviceLabel(row.service) }}</td>
+                            <td class="py-2 text-slate-800">{{ serviceLabel(row.service) }}</td>
                             <td class="py-2">{{ row.issued }}</td>
                             <td class="py-2">{{ row.finished }}</td>
                             <td class="py-2">{{ row.no_show }}</td>
@@ -386,7 +386,7 @@ function describeError(exception: unknown): string {
                 </table>
             </article>
 
-            <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <article class="rounded-3xl border border-slate-200 bg-white p-6">
                 <h3 class="font-semibold">Por ventanilla</h3>
                 <table class="mt-4 min-w-full text-sm">
                     <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -398,9 +398,9 @@ function describeError(exception: unknown): string {
                             <th class="py-2">Espera</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800">
+                    <tbody class="divide-y divide-slate-200">
                         <tr v-for="row in summary.by_station" :key="row.station_label ?? 'none'">
-                            <td class="py-2 text-slate-200">{{ row.station_label ?? 'Sin ventanilla' }}</td>
+                            <td class="py-2 text-slate-800">{{ row.station_label ?? 'Sin ventanilla' }}</td>
                             <td class="py-2">{{ row.issued }}</td>
                             <td class="py-2">{{ row.finished }}</td>
                             <td class="py-2">{{ row.no_show }}</td>
@@ -411,9 +411,9 @@ function describeError(exception: unknown): string {
             </article>
         </div>
 
-        <article class="overflow-x-auto rounded-3xl border border-slate-800 bg-slate-900">
-            <table class="min-w-full divide-y divide-slate-800 text-sm">
-                <thead class="bg-slate-950 text-left text-xs uppercase tracking-wide text-slate-400">
+        <article class="overflow-x-auto rounded-3xl border border-slate-200 bg-white">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                         <th class="px-4 py-3">Ticket</th>
                         <th class="px-4 py-3">Sección</th>
@@ -424,15 +424,15 @@ function describeError(exception: unknown): string {
                         <th class="px-4 py-3">Emitido</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-800">
+                <tbody class="divide-y divide-slate-200">
                     <tr v-for="ticket in tickets?.data ?? []" :key="ticket.id">
-                        <td class="whitespace-nowrap px-4 py-3 font-medium text-sky-300">{{ ticket.label }}</td>
-                        <td class="px-4 py-3 text-slate-300">{{ ticket.section?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-slate-300">{{ ticket.category?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-slate-400">{{ ticket.service?.name ?? ticket.service_label ?? '—' }}</td>
-                        <td class="px-4 py-3 text-slate-300">{{ ticket.status_label }}</td>
-                        <td class="px-4 py-3 text-slate-400">{{ ticket.station_label ?? '—' }}</td>
-                        <td class="whitespace-nowrap px-4 py-3 text-slate-400">{{ formatDateTime(ticket.issued_at) }}</td>
+                        <td class="whitespace-nowrap px-4 py-3 font-medium text-brand-700">{{ ticket.label }}</td>
+                        <td class="px-4 py-3 text-slate-700">{{ ticket.section?.name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-700">{{ ticket.category?.name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-500">{{ ticket.service?.name ?? ticket.service_label ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-700">{{ ticket.status_label }}</td>
+                        <td class="px-4 py-3 text-slate-500">{{ ticket.station_label ?? '—' }}</td>
+                        <td class="whitespace-nowrap px-4 py-3 text-slate-500">{{ formatDateTime(ticket.issued_at) }}</td>
                     </tr>
                     <tr v-if="(tickets?.data.length ?? 0) === 0">
                         <td colspan="7" class="px-4 py-8 text-center text-slate-500">Sin tickets para los filtros seleccionados.</td>
@@ -442,31 +442,31 @@ function describeError(exception: unknown): string {
         </article>
 
         <div v-if="tickets" class="flex flex-wrap items-center justify-between gap-3">
-            <p class="text-sm text-slate-400">
+            <p class="text-sm text-slate-500">
                 Página {{ tickets.meta.current_page }} de {{ tickets.meta.last_page }} · {{ tickets.meta.total }} tickets
             </p>
             <div class="flex gap-2">
-                <button type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 disabled:opacity-40" :disabled="busy || tickets.meta.current_page <= 1" @click="goTo(tickets.meta.current_page - 1)">Anterior</button>
-                <button type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 disabled:opacity-40" :disabled="busy || tickets.meta.current_page >= tickets.meta.last_page" @click="goTo(tickets.meta.current_page + 1)">Siguiente</button>
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-40" :disabled="busy || tickets.meta.current_page <= 1" @click="goTo(tickets.meta.current_page - 1)">Anterior</button>
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-40" :disabled="busy || tickets.meta.current_page >= tickets.meta.last_page" @click="goTo(tickets.meta.current_page + 1)">Siguiente</button>
             </div>
         </div>
 
-        <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+        <article class="rounded-3xl border border-slate-200 bg-white p-6">
             <h3 class="font-semibold">Exportaciones</h3>
-            <p class="mt-1 text-sm text-slate-400">El CSV se genera en segundo plano; actualiza la lista para ver el resultado.</p>
+            <p class="mt-1 text-sm text-slate-500">El CSV se genera en segundo plano; actualiza la lista para ver el resultado.</p>
 
             <div class="mt-4 space-y-3">
-                <div v-for="exported in exportsList" :key="exported.id" class="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div v-for="exported in exportsList" :key="exported.id" class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <p class="font-medium">Exportación #{{ exported.id }}</p>
-                            <p class="mt-1 text-xs text-slate-400">
+                            <p class="mt-1 text-xs text-slate-500">
                                 {{ exported.filters.from }} → {{ exported.filters.to }}
                                 · {{ exported.rows }} filas · {{ formatSize(exported.file_size) }}
                                 · {{ exported.user?.name ?? 'Sistema' }}
                             </p>
                             <p class="mt-1 text-xs text-slate-500">{{ formatDateTime(exported.created_at) }}</p>
-                            <p v-if="exported.error" class="mt-1 text-xs text-red-300">{{ exported.error }}</p>
+                            <p v-if="exported.error" class="mt-1 text-xs text-red-700">{{ exported.error }}</p>
                         </div>
                         <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(exported.status)">
                             {{ exported.status_label }}
@@ -474,10 +474,10 @@ function describeError(exception: unknown): string {
                     </div>
 
                     <div class="mt-3 flex flex-wrap gap-2">
-                        <a v-if="exported.download_url" :href="exported.download_url" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-sky-300 hover:border-sky-500">
+                        <a v-if="exported.download_url" :href="exported.download_url" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-brand-700 hover:border-brand-500">
                             Descargar
                         </a>
-                        <button type="button" class="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-200 hover:border-red-400" :disabled="busy" @click="removeExport(exported)">
+                        <button type="button" class="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:border-red-400" :disabled="busy" @click="removeExport(exported)">
                             Eliminar
                         </button>
                     </div>

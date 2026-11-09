@@ -6,4 +6,37 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Azul institucional CESSA (#004B9C) */
+    --color-brand-50: #eff7ff;
+    --color-brand-100: #dbedff;
+    --color-brand-200: #bfe0ff;
+    --color-brand-300: #93ceff;
+    --color-brand-400: #60b3ff;
+    --color-brand-500: #3b99f5;
+    --color-brand-600: #1d7ddb;
+    --color-brand-700: #0063b8;
+    --color-brand-800: #004b9c;
+    --color-brand-900: #063c7a;
+    --color-brand-950: #042747;
+
+    /* Amarillo institucional CESSA (#FFF001) */
+    --color-accent-50: #fffef0;
+    --color-accent-100: #fffcc2;
+    --color-accent-200: #fff780;
+    --color-accent-300: #fff001;
+    --color-accent-400: #f2d900;
+    --color-accent-500: #d6bd00;
+    --color-accent-600: #b09400;
+    --color-accent-700: #8a7300;
+    --color-accent-800: #6b5900;
+    --color-accent-900: #584a00;
+    --color-accent-950: #332b00;
+}
+
+@layer base {
+    ::selection {
+        background-color: var(--color-accent-300);
+        color: var(--color-brand-950);
+    }
 }

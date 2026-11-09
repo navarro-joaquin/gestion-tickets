@@ -183,89 +183,89 @@ function describeError(exception: unknown): string {
 
 <template>
     <section class="mt-8 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-        <form class="rounded-3xl border border-slate-800 bg-slate-900 p-8" @submit.prevent="save">
+        <form class="rounded-3xl border border-slate-200 bg-white p-8" @submit.prevent="save">
             <h2 class="text-xl font-semibold">{{ form.id ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
-            <p class="mt-2 text-sm text-slate-400">La contraseña es obligatoria al crear; al editar, déjala vacía para conservarla.</p>
+            <p class="mt-2 text-sm text-slate-500">La contraseña es obligatoria al crear; al editar, déjala vacía para conservarla.</p>
 
             <div class="mt-6 grid gap-4">
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Nombre
-                    <input v-model="form.name" required maxlength="120" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <input v-model="form.name" required maxlength="120" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Correo electrónico
-                    <input v-model="form.email" type="email" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <input v-model="form.email" type="email" required class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Contraseña
-                    <input v-model="form.password" type="password" :required="form.id === null" minlength="8" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <input v-model="form.password" type="password" :required="form.id === null" minlength="8" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                 </label>
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-slate-700">
                     Rol
-                    <select v-model="form.role" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                    <select v-model="form.role" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         <option v-for="role in ROLES" :key="role.value" :value="role.value">{{ role.label }}</option>
                     </select>
                 </label>
 
-                <div v-if="requiresDefaultAssignment" class="grid gap-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <div v-if="requiresDefaultAssignment" class="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs text-slate-500">
                         Se preseleccionan al abrir la jornada. El operador puede cambiarlos manualmente cuando sea necesario.
                     </p>
-                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                    <label class="flex flex-col gap-2 text-sm text-slate-700">
                         Sección por defecto
-                        <select v-model="form.default_section" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" @change="onSectionChange">
+                        <select v-model="form.default_section" required class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3" @change="onSectionChange">
                             <option v-for="section in sections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
                         </select>
                     </label>
-                    <label class="flex flex-col gap-2 text-sm text-slate-300">
+                    <label class="flex flex-col gap-2 text-sm text-slate-700">
                         Ventanilla por defecto
-                        <select v-model="form.default_station_id" required class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        <select v-model="form.default_station_id" required class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                             <option :value="null" disabled>Seleccione</option>
                             <option v-for="station in availableDefaultStations" :key="station.id" :value="station.id">{{ station.name }}</option>
                         </select>
                     </label>
-                    <p v-if="availableDefaultStations.length === 0" class="text-xs text-amber-300">
+                    <p v-if="availableDefaultStations.length === 0" class="text-xs text-amber-700">
                         La sección seleccionada no tiene ventanillas activas.
                     </p>
                 </div>
 
-                <label class="flex items-center gap-3 text-sm text-slate-300">
-                    <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-700 bg-slate-950">
+                <label class="flex items-center gap-3 text-sm text-slate-700">
+                    <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-300 bg-slate-50">
                     Usuario activo
                 </label>
             </div>
 
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-slate-950 disabled:opacity-50" :disabled="busy">
+                <button type="submit" class="rounded-xl bg-brand-700 px-5 py-3 font-semibold text-white disabled:opacity-50" :disabled="busy">
                     {{ form.id ? 'Guardar cambios' : 'Crear usuario' }}
                 </button>
-                <button v-if="form.id" type="button" class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300" @click="reset">
+                <button v-if="form.id" type="button" class="rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700" @click="reset">
                     Cancelar
                 </button>
             </div>
         </form>
 
         <div class="space-y-3">
-            <p v-if="message" class="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200">{{ message }}</p>
-            <p v-if="error" class="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">{{ error }}</p>
+            <p v-if="message" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{{ message }}</p>
+            <p v-if="error" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{{ error }}</p>
 
-            <article v-for="user in users" :key="user.id" class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <article v-for="user in users" :key="user.id" class="rounded-2xl border border-slate-200 bg-white p-5">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h3 class="font-semibold">{{ user.name }}</h3>
-                        <p class="text-sm text-slate-400">{{ user.email }}</p>
+                        <p class="text-sm text-slate-500">{{ user.email }}</p>
                         <p class="mt-1 text-xs uppercase tracking-wide text-slate-500">{{ user.role_label }}</p>
-                        <p v-if="user.role !== 'admin'" class="mt-2 text-sm text-slate-400">
+                        <p v-if="user.role !== 'admin'" class="mt-2 text-sm text-slate-500">
                             {{ user.default_section?.name ?? 'Sin sección' }} · {{ user.default_station?.name ?? 'Sin ventanilla' }}
                         </p>
                     </div>
-                    <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="user.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'">
+                    <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="user.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'">
                         {{ user.is_active ? 'Activo' : 'Inactivo' }}
                     </span>
                 </div>
                 <div class="mt-4 flex gap-2">
-                    <button type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-sky-500" @click="edit(user)">Editar</button>
-                    <button type="button" class="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-200 hover:border-red-400" @click="remove(user)">Eliminar</button>
+                    <button type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-brand-500" @click="edit(user)">Editar</button>
+                    <button type="button" class="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:border-red-400" @click="remove(user)">Eliminar</button>
                 </div>
             </article>
         </div>

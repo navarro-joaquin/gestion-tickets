@@ -6,6 +6,7 @@ import type { Category, PublicKiosk, Section, ServiceSummary, Ticket } from '../
 
 const sections = ref<Section[]>([]);
 const selectedSection = ref<Section | null>(null);
+const logoUrl = '/images/cessa-logo.jpg';
 const ticket = ref<Ticket | null>(null);
 const kioskToken = ref<string | null>(null);
 const kioskPrinter = ref<PublicKiosk['printer']>(null);
@@ -160,16 +161,21 @@ function reset(): void {
 </script>
 
 <template>
-    <main class="flex min-h-screen flex-col bg-slate-950 text-white">
-        <header class="flex items-center justify-between border-b border-slate-800 px-8 py-5">
-            <div>
-                <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Gestión de tickets</p>
-                <h1 class="text-3xl font-semibold">Quiosco de atención</h1>
+    <main class="flex min-h-screen flex-col bg-brand-950 text-white">
+        <header class="flex items-center justify-between border-b border-brand-800 px-8 py-5">
+            <div class="flex items-center gap-4">
+                <span class="rounded-2xl bg-white p-1.5">
+                    <img :src="logoUrl" alt="CESSA" class="h-12 w-auto object-contain">
+                </span>
+                <div>
+                    <p class="text-sm uppercase tracking-[0.3em] text-accent-300">CESSA · Gestión de tickets</p>
+                    <h1 class="text-3xl font-semibold">Quiosco de atención</h1>
+                </div>
             </div>
             <button
                 v-if="selectedSection"
                 type="button"
-                class="rounded-xl border border-slate-700 px-5 py-3 text-lg text-slate-200 transition hover:border-sky-500 hover:text-white"
+                class="rounded-xl border border-brand-700 px-5 py-3 text-lg text-slate-200 transition hover:border-accent-300 hover:text-white"
                 @click="clearSection"
             >
                 Cambiar sección
@@ -184,10 +190,10 @@ function reset(): void {
                     v-for="section in sections"
                     :key="section.slug"
                     type="button"
-                    class="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-left transition hover:-translate-y-1 hover:border-sky-500"
+                    class="rounded-3xl border border-brand-800 bg-brand-900 p-10 text-left transition hover:-translate-y-1 hover:border-accent-300"
                     @click="selectSection(section)"
                 >
-                    <span class="text-sm uppercase tracking-[0.2em] text-sky-400">Sección</span>
+                    <span class="text-sm uppercase tracking-[0.2em] text-accent-300">Sección</span>
                     <span class="mt-4 block text-2xl font-semibold">{{ section.name }}</span>
                     <span class="mt-6 block text-lg text-slate-400">
                         {{ section.codes.length }} tipos de atención
@@ -201,7 +207,7 @@ function reset(): void {
         <section v-else class="flex flex-1 flex-col px-8 py-10">
             <div class="mb-8 flex items-end justify-between">
                 <div>
-                    <p class="text-sm uppercase tracking-[0.3em] text-sky-400">Sección seleccionada</p>
+                    <p class="text-sm uppercase tracking-[0.3em] text-accent-300">Sección seleccionada</p>
                     <h2 class="text-3xl font-semibold">{{ selectedSection.name }}</h2>
                 </div>
                 <p class="text-lg text-slate-400">Elija el motivo de su visita</p>
@@ -230,17 +236,17 @@ function reset(): void {
                     </div>
                 </div>
 
-                <h3 class="text-sm uppercase tracking-[0.25em] text-sky-400">Atención por categoría</h3>
+                <h3 class="text-sm uppercase tracking-[0.25em] text-accent-300">Atención por categoría</h3>
                 <div class="mt-4 grid gap-6 md:grid-cols-2">
                     <button
                         v-for="category in categories"
                         :key="category.slug"
                         type="button"
-                        class="rounded-3xl border border-slate-800 bg-slate-900 p-12 text-left transition hover:-translate-y-1 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="rounded-3xl border border-brand-800 bg-brand-900 p-12 text-left transition hover:-translate-y-1 hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-60"
                         :disabled="busy"
                         @click="issueCategory(category)"
                     >
-                        <span class="text-sm uppercase tracking-[0.2em] text-sky-400">
+                        <span class="text-sm uppercase tracking-[0.2em] text-accent-300">
                             {{ category.is_preferential ? 'Atención preferencial' : 'Atención general' }}
                         </span>
                         <span class="mt-4 block text-3xl font-semibold">{{ category.name }}</span>
@@ -248,15 +254,15 @@ function reset(): void {
                 </div>
             </div>
 
-            <div v-else class="mx-auto w-full max-w-3xl rounded-[2rem] border border-sky-500/40 bg-slate-900 p-14 text-center">
-                <p class="text-lg uppercase tracking-[0.3em] text-sky-400">Su ticket</p>
+            <div v-else class="mx-auto w-full max-w-3xl rounded-[2rem] border border-accent-300/50 bg-brand-900 p-14 text-center">
+                <p class="text-lg uppercase tracking-[0.3em] text-accent-300">Su ticket</p>
                 <p class="mt-6 text-8xl font-black tracking-tight">{{ ticket.label }}</p>
                 <p class="mt-6 text-2xl text-slate-300">
                     {{ ticket.service?.name ?? ticket.category?.name }}
                 </p>
                 <p class="mt-3 text-lg text-slate-500">{{ ticket.section?.name }}</p>
 
-                <p v-if="printState === 'printing'" class="mt-10 text-lg text-sky-300">
+                <p v-if="printState === 'printing'" class="mt-10 text-lg text-accent-300">
                     Imprimiendo su ticket…
                 </p>
                 <p v-else-if="printState === 'printed'" class="mt-10 text-lg text-emerald-400">
@@ -268,7 +274,7 @@ function reset(): void {
 
                 <button
                     type="button"
-                    class="mt-10 rounded-2xl bg-sky-500 px-8 py-4 text-xl font-semibold text-slate-950 transition hover:bg-sky-400"
+                    class="mt-10 rounded-2xl bg-accent-300 px-8 py-4 text-xl font-semibold text-brand-950 transition hover:bg-accent-200"
                     @click="reset"
                 >
                     Emitir otro ticket

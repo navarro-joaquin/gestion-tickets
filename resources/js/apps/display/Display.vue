@@ -8,6 +8,7 @@ import MediaStage from './components/MediaStage.vue';
 import QueueBoard from './components/QueueBoard.vue';
 
 const AUDIO_STORAGE_KEY = 'tickets.display.audio';
+const logoUrl = '/images/cessa-logo.jpg';
 
 const displayToken = new URLSearchParams(window.location.search).get('pantalla') ?? undefined;
 
@@ -205,13 +206,18 @@ function subscribeToSections(): void {
 </script>
 
 <template>
-    <main class="flex min-h-screen flex-col overflow-hidden bg-slate-950 text-white">
-        <header class="flex flex-wrap items-end justify-between gap-6 border-b border-slate-800 px-10 py-8">
-            <div>
-                <p class="text-lg uppercase tracking-[0.4em] text-sky-400">
-                    {{ display ? display.name : 'Turnos de atención' }}
-                </p>
-                <h1 class="mt-2 text-4xl font-semibold">Pantalla de llamados</h1>
+    <main class="flex min-h-screen flex-col overflow-hidden bg-brand-950 text-white">
+        <header class="flex flex-wrap items-end justify-between gap-6 border-b border-brand-800 px-10 py-8">
+            <div class="flex items-center gap-5">
+                <span class="rounded-2xl bg-white p-2">
+                    <img :src="logoUrl" alt="CESSA" class="h-16 w-auto object-contain">
+                </span>
+                <div>
+                    <p class="text-lg uppercase tracking-[0.4em] text-accent-300">
+                        {{ display ? display.name : 'Turnos de atención' }}
+                    </p>
+                    <h1 class="mt-2 text-4xl font-semibold">Pantalla de llamados</h1>
+                </div>
             </div>
 
             <div class="flex flex-wrap items-center gap-4">
@@ -226,7 +232,7 @@ function subscribeToSections(): void {
                         class="rounded-xl px-4 py-3 text-sm font-semibold transition"
                         :class="audioEnabled
                             ? 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-200'
-                            : 'bg-sky-500 text-slate-950 hover:bg-sky-400'"
+                            : 'bg-accent-300 text-brand-950 hover:bg-accent-200'"
                         @click="toggleAudio"
                     >
                         {{ audioEnabled ? 'Ring + voz activos' : 'Activar audio' }}
@@ -252,7 +258,7 @@ function subscribeToSections(): void {
             </div>
         </section>
 
-        <footer class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 px-10 py-5 text-sm text-slate-500">
+        <footer class="flex flex-wrap items-center justify-between gap-4 border-t border-brand-800 px-10 py-5 text-sm text-slate-500">
             <p>
                 {{ echoClient ? 'Actualización en tiempo real por WebSocket.' : 'Actualización automática cada 5 segundos.' }}
                 <span v-if="displayToken">· Pantalla autenticada por token.</span>

@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Consola · Gestión de Tickets</title>
+    <title>Consola · CESSA Gestión de Tickets</title>
     @vite(['resources/css/app.css', 'resources/js/apps/console/main.ts'])
 </head>
-<body class="bg-slate-950">
+<body class="bg-brand-950">
     <div id="console"></div>
 </body>
 </html>
