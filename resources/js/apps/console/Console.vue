@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../../shared/api/client';
 import { getEcho } from '../../shared/echo';
-import { createPrintDriver, type PrintDriverKind } from '../../shared/printing/escpos';
 import type {
     AuthUser,
     ConsoleQueue,
@@ -29,9 +28,6 @@ const transferReason = ref('');
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
-const printState = ref<'idle' | 'printing' | 'printed' | 'failed'>('idle');
-const driverKind = ref<PrintDriverKind>('local');
-const printerTarget = ref<string | null>(null);
 
 const echoClient = getEcho();
 let channelName: string | null = null;
@@ -59,12 +55,6 @@ const transferSections = computed<Section[]>(() => {
 });
 
 onMounted(async () => {
-    const storedDriver = localStorage.getItem('print-driver');
-
-    if (storedDriver === 'local' || storedDriver === 'qz') {
-        driverKind.value = storedDriver;
-    }
-
     await loadCurrentUser();
 
     if (!currentUser.value) {
@@ -223,7 +213,6 @@ async function useSession(activeSession: OperatorSession): Promise<void> {
         stations.value = sectionStations.data;
     }
 
-    await loadPrinter(activeSession.station?.id ?? null);
     await loadQueue();
     subscribe();
 }
@@ -244,7 +233,6 @@ async function closeSession(): Promise<void> {
         unsubscribe();
         session.value = null;
         queue.value = null;
-        printState.value = 'idle';
     } catch (exception) {
         error.value = describeError(exception);
     } finally {
@@ -266,7 +254,6 @@ async function changeStation(): Promise<void> {
         session.value = response.data;
         selectedStationId.value = response.data.station?.id ?? null;
         message.value = response.message;
-        await loadPrinter(response.data.station?.id ?? null);
         await loadQueue();
     } catch (exception) {
         error.value = describeError(exception);
@@ -275,27 +262,8 @@ async function changeStation(): Promise<void> {
     }
 }
 
-async function loadPrinter(stationId: number | null): Promise<void> {
-    printerTarget.value = null;
-
-    if (!stationId) {
-        return;
-    }
-
-    try {
-        const response = await api.consolePrinters(stationId);
-        const printer = response.data[0];
-
-        if (printer) {
-            driverKind.value = printer.driver;
-            printerTarget.value = printer.target;
-        }
-    } catch {
-        // La configuración de impresora es opcional; se conserva el valor local.
-    }
-}
-
-async function loadQueue(): Promise<void> {    if (!session.value?.section?.slug || !currentStationName.value) {
+async function loadQueue(): Promise<void> {
+    if (!session.value?.section?.slug || !currentStationName.value) {
         return;
     }
 
@@ -378,37 +346,6 @@ async function runAction(action: 'recall' | 'start' | 'finish'): Promise<void> {
     }
 }
 
-async function reprint(): Promise<void> {
-    if (busy.value || !activeTicket.value) {
-        return;
-    }
-
-    busy.value = true;
-    message.value = '';
-    error.value = '';
-    printState.value = 'printing';
-
-    try {
-        const response = await api.reprint(activeTicket.value.id);
-
-        try {
-            await createPrintDriver(driverKind.value, printerTarget.value).print(response.print.escpos_base64);
-            printState.value = 'printed';
-            message.value = response.message;
-        } catch (printException) {
-            printState.value = 'failed';
-            const detail = describeError(printException);
-            error.value = `No se pudo imprimir: ${detail}`;
-            await api.printFailed(activeTicket.value.id, detail);
-        }
-    } catch (exception) {
-        printState.value = 'idle';
-        error.value = describeError(exception);
-    } finally {
-        busy.value = false;
-    }
-}
-
 async function transfer(): Promise<void> {
     if (!activeTicket.value || !transferSectionSlug.value || busy.value) {
         return;
@@ -435,10 +372,6 @@ async function transfer(): Promise<void> {
     } finally {
         busy.value = false;
     }
-}
-
-function changeDriver(): void {
-    localStorage.setItem('print-driver', driverKind.value);
 }
 
 async function logout(): Promise<void> {
@@ -634,23 +567,7 @@ function describeError(exception: unknown): string {
                     >
                         Finalizar
                     </button>
-
-                    <button
-                        type="button"
-                        class="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
-                        :disabled="busy || !activeTicket"
-                        @click="reprint"
-                    >
-                        {{ printState === 'printing' ? 'Reimprimiendo…' : 'Reimprimir ticket' }}
-                    </button>
                 </div>
-
-                <p v-if="printState === 'printed'" class="mt-4 text-sm text-emerald-300">
-                    Ticket enviado a la impresora.
-                </p>
-                <p v-else-if="printState === 'failed'" class="mt-4 text-sm text-amber-300">
-                    Fallo de impresión registrado. Puede reintentar con otro driver.
-                </p>
             </div>
 
             <aside class="space-y-4">
@@ -713,18 +630,7 @@ function describeError(exception: unknown): string {
                 </div>
 
                 <div class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                    <h2 class="text-lg font-semibold">Impresora</h2>
-                    <label class="mt-4 flex flex-col gap-2 text-sm text-slate-400">
-                        Driver
-                        <select
-                            v-model="driverKind"
-                            class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
-                            @change="changeDriver"
-                        >
-                            <option value="local">Servicio local</option>
-                            <option value="qz">QZ Tray</option>
-                        </select>
-                    </label>
+                    <h2 class="text-lg font-semibold">Conexión</h2>
                     <p class="mt-4 text-sm text-slate-500">
                         {{ echoClient ? 'Reverb configurado: los cambios se reciben en tiempo real.' : 'Sin Reverb: actualización cada 5 segundos.' }}
                     </p>

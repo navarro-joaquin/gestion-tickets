@@ -12,7 +12,7 @@
 | Reverb (WebSocket) | `php artisan reverb:start` | 8080 | No; hay polling de respaldo |
 | Worker de cola | `php artisan queue:work --tries=3 --timeout=120` | — | Para exportaciones CSV |
 | Scheduler | `php artisan schedule:work` o cron `* * * * *` | — | Sí (cierre, no-show, purga) |
-| Impresión local | Servicio ESC/POS en `VITE_PRINT_SERVICE_URL` o QZ Tray | 9100 | No; el ticket se muestra en pantalla |
+| Impresión local | Impresora configurada por quiosco en `/admin/impresoras` | 9100 | No; el ticket se muestra en pantalla |
 
 Orden de arranque recomendado: MySQL → aplicación → Reverb → worker → scheduler.
 En producción, Nginx y PHP-FPM los gestiona el sistema operativo o el contenedor
@@ -29,7 +29,7 @@ de la aplicación; este repositorio solo incluye el contenedor de MySQL.
 - [ ] Los operadores tienen usuario activo y rol correcto.
 - [ ] El quiosco y la pantalla cargan con su token.
 - [ ] La pantalla tiene audio activo (botón “Activar audio”).
-- [ ] Hay papel en la impresora y el servicio de impresión responde.
+- [ ] Hay papel en la impresora y la impresora del quiosco está configurada y responde.
 
 ### Durante la jornada
 
@@ -121,18 +121,21 @@ volumen está corrupto, restaurar el último respaldo (sección 5).
 ### 3.5 Impresora o servicio de impresión caído
 
 **Síntoma:** el quiosco muestra “No se pudo imprimir. Conserve este código en
-pantalla.” o la consola no imprime la reimpresión.
+pantalla.”
 
 **Impacto:** el ticket ya fue emitido y aparece en la pantalla; la operación
-continúa.
+continúa. La consola del operador no imprime ni permite reimprimir.
 
 **Acciones:**
 
 1. Verificar papel, cable USB y energía.
-2. Revisar el servicio local en `VITE_PRINT_SERVICE_URL` o QZ Tray.
-3. Desde la consola, usar “Reimprimir”.
-4. Si falla de nuevo, registrar el fallo; el ticket conserva su estado.
-5. Anotar el código y número para atención manual si la impresora no vuelve.
+2. Revisar que la impresora esté asociada al quiosco en `/admin/impresoras`.
+3. Verificar el destino configurado en la impresora y, si usa el driver local,
+   que el servicio escuche en ese destino o en `VITE_PRINT_SERVICE_URL`.
+4. Si usa QZ Tray, confirmar que esté abierto y conectado.
+5. Si la impresora no vuelve, anotar el código y número para atención manual.
+6. Al restablecer la impresora, emitir un ticket de prueba desde el quiosco para
+   confirmar que vuelve a imprimir.
 
 ### 3.6 Pantalla sin audio o sin contenido
 

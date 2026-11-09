@@ -2,7 +2,7 @@
 
 namespace Database\Factories\Domain\Printing;
 
-use App\Domain\Operations\Station;
+use App\Domain\Kiosks\KioskDevice;
 use App\Domain\Printing\Printer;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,7 +19,7 @@ class PrinterFactory extends Factory
     public function definition(): array
     {
         return [
-            'station_id' => Station::factory(),
+            'kiosk_device_id' => KioskDevice::factory(),
             'name' => 'Impresora '.fake()->unique()->numberBetween(1, 99),
             'driver' => 'local',
             'target' => 'http://127.0.0.1:9100',

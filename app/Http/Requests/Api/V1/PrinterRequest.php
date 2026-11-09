@@ -18,7 +18,7 @@ class PrinterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'station_id' => ['nullable', 'integer', Rule::exists('stations', 'id')],
+            'kiosk_device_id' => ['nullable', 'integer', Rule::exists('kiosk_devices', 'id')],
             'name' => ['required', 'string', 'max:80'],
             'driver' => ['required', 'string', Rule::in(['local', 'qz'])],
             'target' => ['nullable', 'string', 'max:255'],

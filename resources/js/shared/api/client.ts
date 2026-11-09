@@ -15,7 +15,6 @@ import type {
     OperatorSession,
     Paginated,
     Playlist,
-    PrintPayload,
     Printer,
     PriorityProfile,
     PublicKiosk,
@@ -173,17 +172,6 @@ export const api = {
                 to_operator_id: toOperatorId ?? undefined,
                 reason: reason || undefined,
             }),
-        });
-    },
-
-    reprint(ticketId: number): Promise<{ data: Ticket; print: PrintPayload; message: string }> {
-        return request(`/console/tickets/${ticketId}/reprint`, { method: 'POST' });
-    },
-
-    printFailed(ticketId: number, message: string): Promise<{ data: Ticket; message: string }> {
-        return request(`/console/tickets/${ticketId}/print-failed`, {
-            method: 'POST',
-            body: JSON.stringify({ message }),
         });
     },
 
@@ -393,12 +381,6 @@ export const api = {
         return request(`/admin/printers/${id}`, { method: 'DELETE' });
     },
 
-    consolePrinters(stationId?: number): Promise<{ data: Printer[] }> {
-        const query = stationId ? `?station_id=${stationId}` : '';
-
-        return request(`/console/printers${query}`);
-    },
-
     auditLogs(params: AuditLogFilters = {}): Promise<Paginated<AuditLogEntry>> {
         const query = new URLSearchParams();
 
@@ -585,7 +567,7 @@ export interface KioskPayload {
 }
 
 export interface PrinterPayload {
-    station_id?: number | null;
+    kiosk_device_id?: number | null;
     name: string;
     driver: 'local' | 'qz';
     target?: string | null;

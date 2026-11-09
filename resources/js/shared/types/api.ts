@@ -377,6 +377,11 @@ export interface PublicKiosk {
     id: number;
     name: string;
     slug: string;
+    printer: {
+        driver: 'local' | 'qz';
+        target: string | null;
+        paper_width: number;
+    } | null;
     sections: Section[];
 }
 
@@ -388,13 +393,10 @@ export interface Printer {
     paper_width: number;
     is_active: boolean;
     config: Record<string, unknown> | null;
-    station?: {
+    kiosk_device?: {
         id: number;
         name: string;
-        section?: {
-            slug: string;
-            name: string;
-        } | null;
+        slug: string;
     } | null;
 }
 

@@ -15,7 +15,7 @@ class AdminPrinterController extends Controller
     public function index(): AnonymousResourceCollection
     {
         $printers = Printer::query()
-            ->with('station.section')
+            ->with('kioskDevice')
             ->orderBy('name')
             ->get();
 
@@ -28,7 +28,7 @@ class AdminPrinterController extends Controller
 
         $audit->record('printer.created', $printer, null, $this->payload($printer), $request);
 
-        $printer->load('station.section');
+        $printer->load('kioskDevice');
 
         return response()->json([
             'data' => new PrinterResource($printer),
@@ -46,7 +46,7 @@ class AdminPrinterController extends Controller
 
         $audit->record('printer.updated', $printer, $before, $this->payload($printer), $request);
 
-        $printer->load('station.section');
+        $printer->load('kioskDevice');
 
         return response()->json([
             'data' => new PrinterResource($printer),
@@ -71,7 +71,7 @@ class AdminPrinterController extends Controller
     private function payload(Printer $printer): array
     {
         return [
-            'station_id' => $printer->station_id,
+            'kiosk_device_id' => $printer->kiosk_device_id,
             'name' => $printer->name,
             'driver' => $printer->driver,
             'target' => $printer->target,

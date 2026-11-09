@@ -2,7 +2,7 @@
 
 namespace App\Domain\Printing;
 
-use App\Domain\Operations\Station;
+use App\Domain\Kiosks\KioskDevice;
 use Database\Factories\Domain\Printing\PrinterFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'station_id',
+    'kiosk_device_id',
     'name',
     'driver',
     'target',
@@ -38,11 +38,11 @@ class Printer extends Model
     }
 
     /**
-     * @return BelongsTo<Station, $this>
+     * @return BelongsTo<KioskDevice, $this>
      */
-    public function station(): BelongsTo
+    public function kioskDevice(): BelongsTo
     {
-        return $this->belongsTo(Station::class);
+        return $this->belongsTo(KioskDevice::class);
     }
 
     #[Scope]

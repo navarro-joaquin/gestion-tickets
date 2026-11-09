@@ -56,26 +56,26 @@ dependencia y que la operación puede continuar o recuperarse sin perder tickets
 
 **Evidencia:** estado de la exportación antes y después, archivo descargado.
 
-### C-03 — Impresora apagada o sin conexión
+### C-03 — Impresora del quiosco apagada o sin conexión
 
 **Procedimiento:**
 
-1. Apagar la impresora o detener el servicio local/QZ Tray.
+1. Apagar la impresora o detener el servicio local/QZ Tray configurado para el quiosco.
 2. Emitir un ticket desde el quiosco.
 3. Verificar el mensaje en pantalla.
-4. Llamar el ticket desde la consola y reimprimir.
-5. Registrar el fallo de impresión si corresponde.
-6. Encender la impresora y reimprimir.
+4. Confirmar que el ticket aparece en la pantalla y puede llamarse desde la consola.
+5. Confirmar que la consola no muestra controles de impresora ni opción de reimprimir.
+6. Encender la impresora y emitir un ticket de prueba desde el quiosco.
 
 **Esperado:**
 
 - El ticket se emite y aparece en la pantalla aunque no imprima.
 - El quiosco muestra “No se pudo imprimir. Conserve este código en pantalla.”
-- La reimpresión falla de forma controlada y se registra `print_failed`.
-- Al volver la impresora, la reimpresión funciona.
+- La consola no permite reimprimir ni registrar fallos de impresión.
 - El estado del ticket no cambia por un fallo de impresión.
+- Al volver la impresora, el quiosco imprime los tickets nuevos con la configuración de su dispositivo.
 
-**Evidencia:** ticket en pantalla, evento `print_failed`, reimpresión exitosa.
+**Evidencia:** ticket en pantalla, mensaje del quiosco y ticket de prueba impreso tras restablecer la impresora.
 
 ### C-04 — Redis caído (solo si está habilitado)
 

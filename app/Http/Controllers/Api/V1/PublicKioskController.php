@@ -20,11 +20,21 @@ class PublicKioskController extends Controller
             ->with(['ticketCodes.categories', 'services'])
             ->get();
 
+        $printer = $kioskDevice->printers()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->first();
+
         return response()->json([
             'data' => [
                 'id' => $kioskDevice->id,
                 'name' => $kioskDevice->name,
                 'slug' => $kioskDevice->slug,
+                'printer' => $printer === null ? null : [
+                    'driver' => $printer->driver,
+                    'target' => $printer->target,
+                    'paper_width' => $printer->paper_width,
+                ],
                 'sections' => SectionResource::collection($sections)->resolve(),
             ],
         ]);

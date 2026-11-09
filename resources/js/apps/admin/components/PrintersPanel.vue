@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api } from '../../../shared/api/client';
-import type { Printer, Station } from '../../../shared/types/api';
+import type { KioskDevice, Printer } from '../../../shared/types/api';
 
 interface PrinterForm {
     id: number | null;
-    station_id: number | null;
+    kiosk_device_id: number | null;
     name: string;
     driver: 'local' | 'qz';
     target: string;
@@ -14,21 +14,21 @@ interface PrinterForm {
 }
 
 const printers = ref<Printer[]>([]);
-const stations = ref<Station[]>([]);
+const kiosks = ref<KioskDevice[]>([]);
 const form = ref<PrinterForm>(emptyForm());
 const message = ref('');
 const error = ref('');
 const busy = ref(false);
 
 onMounted(async () => {
-    await loadStations();
+    await loadKiosks();
     await load();
 });
 
-async function loadStations(): Promise<void> {
+async function loadKiosks(): Promise<void> {
     try {
-        const response = await api.adminStations();
-        stations.value = response.data;
+        const response = await api.adminKiosks();
+        kiosks.value = response.data;
     } catch (exception) {
         error.value = describeError(exception);
     }
@@ -46,7 +46,7 @@ async function load(): Promise<void> {
 function edit(printer: Printer): void {
     form.value = {
         id: printer.id,
-        station_id: printer.station?.id ?? null,
+        kiosk_device_id: printer.kiosk_device?.id ?? null,
         name: printer.name,
         driver: printer.driver,
         target: printer.target ?? '',
@@ -69,7 +69,7 @@ async function save(): Promise<void> {
     error.value = '';
 
     const payload = {
-        station_id: form.value.station_id,
+        kiosk_device_id: form.value.kiosk_device_id,
         name: form.value.name,
         driver: form.value.driver,
         target: form.value.target.trim() === '' ? null : form.value.target.trim(),
@@ -112,14 +112,10 @@ async function remove(printer: Printer): Promise<void> {
     }
 }
 
-function stationLabel(station: Station): string {
-    return `${station.section?.name ?? 'Sin sección'} · ${station.name}`;
-}
-
 function emptyForm(): PrinterForm {
     return {
         id: null,
-        station_id: null,
+        kiosk_device_id: null,
         name: '',
         driver: 'local',
         target: '',
@@ -144,10 +140,10 @@ function describeError(exception: unknown): string {
 
             <div class="mt-6 grid gap-4">
                 <label class="flex flex-col gap-2 text-sm text-slate-300">
-                    Ventanilla
-                    <select v-model="form.station_id" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
-                        <option :value="null">Sin ventanilla</option>
-                        <option v-for="station in stations" :key="station.id" :value="station.id">{{ stationLabel(station) }}</option>
+                    Quiosco
+                    <select v-model="form.kiosk_device_id" class="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
+                        <option :value="null">Sin quiosco</option>
+                        <option v-for="kiosk in kiosks" :key="kiosk.id" :value="kiosk.id">{{ kiosk.name }}</option>
                     </select>
                 </label>
                 <label class="flex flex-col gap-2 text-sm text-slate-300">
@@ -199,7 +195,7 @@ function describeError(exception: unknown): string {
                     <div>
                         <h3 class="font-semibold">{{ printer.name }}</h3>
                         <p class="text-sm text-slate-400">
-                            {{ printer.station ? `${printer.station.section?.name ?? '—'} · ${printer.station.name}` : 'Sin ventanilla' }}
+                            {{ printer.kiosk_device ? printer.kiosk_device.name : 'Sin quiosco' }}
                         </p>
                         <p class="mt-1 text-xs text-slate-500">{{ printer.driver }} · {{ printer.paper_width }} mm · {{ printer.target || 'sin destino' }}</p>
                     </div>

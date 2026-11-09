@@ -29,19 +29,6 @@ class TicketPolicy
             && in_array($ticket->status, [TicketStatus::Waiting, TicketStatus::Called], true);
     }
 
-    public function reprint(User $user, Ticket $ticket): bool
-    {
-        $session = $this->activeSession($user);
-
-        return $session !== null
-            && $session->section_id === $ticket->current_section_id
-            && in_array($ticket->status, [
-                TicketStatus::Waiting,
-                TicketStatus::Called,
-                TicketStatus::InService,
-            ], true);
-    }
-
     private function activeSession(User $user): ?OperatorSession
     {
         if (! in_array($user->role, [UserRole::Operator, UserRole::Supervisor, UserRole::Admin], true)) {

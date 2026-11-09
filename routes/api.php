@@ -15,7 +15,6 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ConsoleController;
 use App\Http\Controllers\Api\V1\DisplayController;
 use App\Http\Controllers\Api\V1\OperatorSessionController;
-use App\Http\Controllers\Api\V1\PrinterConfigController;
 use App\Http\Controllers\Api\V1\PriorityProfileController;
 use App\Http\Controllers\Api\V1\PublicKioskController;
 use App\Http\Controllers\Api\V1\QueueSimulatorController;
@@ -56,9 +55,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('console/tickets/{ticket}/start', [ConsoleController::class, 'start'])->name('console.start');
             Route::post('console/tickets/{ticket}/finish', [ConsoleController::class, 'finish'])->name('console.finish');
             Route::post('console/tickets/{ticket}/transfer', [ConsoleController::class, 'transfer'])->name('console.transfer');
-            Route::post('console/tickets/{ticket}/reprint', [ConsoleController::class, 'reprint'])->name('console.reprint');
-            Route::post('console/tickets/{ticket}/print-failed', [ConsoleController::class, 'printFailed'])->name('console.print-failed');
-            Route::get('console/printers', [PrinterConfigController::class, 'index'])->name('console.printers');
         });
 
         Route::prefix('admin')->name('admin.')->middleware('role:admin')->group(function (): void {

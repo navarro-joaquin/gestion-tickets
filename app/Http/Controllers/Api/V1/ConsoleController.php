@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Domain\Operations\Actions\RegisterPrintFailure;
-use App\Domain\Operations\Actions\ReprintTicket;
 use App\Domain\Operations\Actions\TransferTicket;
 use App\Domain\Operations\OperatorSession;
 use App\Domain\Sections\Section;
@@ -11,11 +9,9 @@ use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\FinishTicket;
 use App\Domain\Ticketing\Actions\RecallTicket;
 use App\Domain\Ticketing\Actions\StartTicket;
-use App\Domain\Ticketing\Printing\EscPosTicketFormatter;
 use App\Domain\Ticketing\Ticket;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CallNextTicketRequest;
-use App\Http\Requests\Api\V1\RegisterPrintFailureRequest;
 use App\Http\Requests\Api\V1\TransferTicketRequest;
 use App\Http\Resources\OperatorSessionResource;
 use App\Http\Resources\StationResource;
@@ -141,46 +137,6 @@ class ConsoleController extends Controller
         return response()->json([
             'data' => new TicketResource($ticket),
             'message' => 'Ticket transferido a la sección de destino.',
-        ]);
-    }
-
-    public function reprint(
-        Request $request,
-        Ticket $ticket,
-        ReprintTicket $action,
-        EscPosTicketFormatter $formatter,
-    ): JsonResponse {
-        $this->authorize('reprint', $ticket);
-
-        $ticket = $action->handle($ticket, $request->user()->id);
-        $ticket->loadMissing(['section', 'category', 'service']);
-
-        return response()->json([
-            'data' => new TicketResource($ticket),
-            'print' => [
-                'escpos_base64' => base64_encode($formatter->format($ticket)),
-                'text' => $formatter->preview($ticket),
-            ],
-            'message' => 'Ticket reimpreso.',
-        ]);
-    }
-
-    public function printFailed(
-        RegisterPrintFailureRequest $request,
-        Ticket $ticket,
-        RegisterPrintFailure $action,
-    ): JsonResponse {
-        $this->authorize('reprint', $ticket);
-
-        $ticket = $action->handle(
-            $ticket,
-            $request->validated('message'),
-            $request->user()->id,
-        );
-
-        return response()->json([
-            'data' => new TicketResource($ticket),
-            'message' => 'Fallo de impresión registrado.',
         ]);
     }
 

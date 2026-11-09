@@ -14,7 +14,6 @@ interface ImportMetaEnv {
     readonly VITE_REVERB_HOST?: string;
     readonly VITE_REVERB_PORT?: string;
     readonly VITE_REVERB_SCHEME?: string;
-    readonly VITE_PRINT_DRIVER?: string;
     readonly VITE_PRINT_SERVICE_URL?: string;
 }
 

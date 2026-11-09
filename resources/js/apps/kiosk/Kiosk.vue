@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../../shared/api/client';
-import { createPrintDriver, type PrintDriverKind } from '../../shared/printing/escpos';
-import type { Category, Section, ServiceSummary, Ticket } from '../../shared/types/api';
+import { createPrintDriver } from '../../shared/printing/escpos';
+import type { Category, PublicKiosk, Section, ServiceSummary, Ticket } from '../../shared/types/api';
 
 const sections = ref<Section[]>([]);
 const selectedSection = ref<Section | null>(null);
 const ticket = ref<Ticket | null>(null);
 const kioskToken = ref<string | null>(null);
+const kioskPrinter = ref<PublicKiosk['printer']>(null);
 const error = ref('');
 const busy = ref(false);
 const printState = ref<'idle' | 'printing' | 'printed' | 'failed'>('idle');
-const driverKind = ref<PrintDriverKind>('local');
 
 let resetTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -38,12 +38,6 @@ const categories = computed<Category[]>(() => {
 const services = computed<ServiceSummary[]>(() => selectedSection.value?.services ?? []);
 
 onMounted(async () => {
-    const storedDriver = localStorage.getItem('print-driver');
-
-    if (storedDriver === 'local' || storedDriver === 'qz') {
-        driverKind.value = storedDriver;
-    }
-
     await loadSections();
 });
 
@@ -65,6 +59,7 @@ async function loadSections(): Promise<void> {
     try {
         kioskToken.value = token;
         const response = await api.kiosk(token);
+        kioskPrinter.value = response.data.printer;
         sections.value = response.data.sections;
     } catch (exception) {
         error.value = exception instanceof Error
@@ -127,13 +122,20 @@ async function issue(sectionSlug: string, categorySlug?: string, serviceSlug?: s
         );
         ticket.value = response.data;
 
-        printState.value = 'printing';
-
-        try {
-            await createPrintDriver(driverKind.value).print(response.print.escpos_base64);
-            printState.value = 'printed';
-        } catch {
+        if (!kioskPrinter.value) {
             printState.value = 'failed';
+        } else {
+            printState.value = 'printing';
+
+            try {
+                await createPrintDriver(
+                    kioskPrinter.value.driver,
+                    kioskPrinter.value.target,
+                ).print(response.print.escpos_base64);
+                printState.value = 'printed';
+            } catch {
+                printState.value = 'failed';
+            }
         }
 
         if (resetTimer) {
@@ -148,10 +150,6 @@ async function issue(sectionSlug: string, categorySlug?: string, serviceSlug?: s
     } finally {
         busy.value = false;
     }
-}
-
-function changeDriver(): void {
-    localStorage.setItem('print-driver', driverKind.value);
 }
 
 function reset(): void {
@@ -278,20 +276,6 @@ function reset(): void {
             </div>
 
             <p v-if="error" class="mt-8 text-center text-lg text-red-400">{{ error }}</p>
-
-            <div class="mt-auto flex justify-end pt-10">
-                <label class="flex items-center gap-3 text-sm text-slate-400">
-                    Impresora
-                    <select
-                        v-model="driverKind"
-                        class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-200"
-                        @change="changeDriver"
-                    >
-                        <option value="local">Servicio local</option>
-                        <option value="qz">QZ Tray</option>
-                    </select>
-                </label>
-            </div>
         </section>
     </main>
 </template>

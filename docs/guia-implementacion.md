@@ -265,8 +265,9 @@ Laravel y Docker Compose leen el mismo archivo `.env`:
 - `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`, `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`: servidor Reverb.
 - `VITE_REVERB_*`: mismas credenciales expuestas al frontend por Vite (la clave pública, nunca el secreto).
 - `BROADCAST_CONNECTION`: `log` o `null` por defecto; usar `reverb` para tiempo real.
-- `VITE_PRINT_DRIVER`: `local` o `qz`; el quiosco permite cambiarlo y lo guarda en `localStorage`.
-- `VITE_PRINT_SERVICE_URL`: URL del servicio local de impresión; por defecto `http://127.0.0.1:9100`.
+- `VITE_PRINT_SERVICE_URL`: URL por defecto del servicio local de impresión si la impresora no declara un destino propio; por defecto `http://127.0.0.1:9100`.
+
+El driver (`local` o `qz`), el destino y el ancho de papel se configuran por impresora desde administración. Cada impresora pertenece a un quiosco y el quiosco recibe su configuración al cargar; la consola del operador no imprime ni administra impresoras.
 
 ### 6.3 Reglas
 
@@ -494,7 +495,7 @@ Dos columnas generadas almacenadas impiden la doble atención:
 | `occurred_at` | timestamp | momento del evento |
 | `created_at` | timestamp nullable | sin `updated_at` |
 
-Índices `(ticket_id, occurred_at)` y `type`. Es un registro append-only: la aplicación no lo actualiza ni lo borra.
+Índices `(ticket_id, occurred_at)` y `type`. Es un registro append-only: la aplicación no lo actualiza ni lo borra. Los tipos `reprinted` y `print_failed` se conservan para datos históricos; desde el cambio de modelo de impresión la consola ya no genera esos eventos.
 
 Detalles críticos implementados en las Fases 2 y 3:
 
@@ -767,7 +768,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - `resources/js/apps/console/`: selección de sección/ventanilla, ticket activo, llamar, rellamar, iniciar y finalizar; polling cada 5 s y suscripción a Echo si Reverb está configurado.
   - `resources/js/apps/admin/`: ajuste de la hora de cierre y visualización del próximo cierre.
   - Cliente API y tipos compartidos en `resources/js/shared/`.
-  - Adaptador de impresión con drivers `local` (HTTP a `VITE_PRINT_SERVICE_URL`) y `qz` (QZ Tray).
+  - Adaptador de impresión con drivers `local` (HTTP al destino configurado o `VITE_PRINT_SERVICE_URL`) y `qz` (QZ Tray). El driver y el destino se guardan por impresora y se asocian al quiosco.
 - Rutas Blade `/quiosco`, `/consola` y `/admin/ajustes`; Vite con entradas múltiples.
 - Pruebas: **71 pruebas, 226 aserciones en verde**, incluidas T-SEQ, T-CONC (6 procesos × 5 tickets = 30 números únicos), flujo completo por API y ajuste de hora de cierre.
 
@@ -788,7 +789,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - [x] Cambio de ventanilla con historial.
 - [x] Transferencia de tickets entre secciones con historial.
 - [x] Pantallas de llamados.
-- [x] Reimpresión y manejo de fallos de impresora.
+- [x] Impresión ESC/POS desde el quiosco con la impresora configurada para el dispositivo.
 
 **Salida:** historial completo de asignaciones y pantalla actualizada por WebSocket.
 
@@ -801,7 +802,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - `CloseOperatorSession`: rechaza el cierre si el operador tiene un ticket activo; libera asignaciones.
   - `ChangeOperatorStation`: valida que la ventanilla pertenezca a la sección y esté libre; conserva historial.
   - `TransferTicket`: solo para tickets `waiting` o `called`; conserva `code` y `number`, actualiza `current_section_id`, registra `ticket_transfers` y un evento `transferred`. Un ticket `called` vuelve a `waiting`, libera la asignación y reinicia `call_count`.
-  - `ReprintTicket` y `RegisterPrintFailure`: registran eventos `reprinted` y `print_failed` sin cambiar el estado del ticket.
+  - `ReprintTicket` y `RegisterPrintFailure` se retiraron al mover la impresión al quiosco; los eventos `reprinted` y `print_failed` se conservan solo para datos históricos.
 - `CallNextTicket` usa `current_section_id`, exige que la sección y la ventanilla coincidan con la sesión activa del operador y permite el mismo nombre de ventanilla en secciones distintas.
 - `CloseTicketDay` cierra también las sesiones y asignaciones activas al final de la jornada.
 - API v1:
@@ -812,11 +813,9 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - `DELETE /api/v1/console/session/{session}` → cierre de sesión.
   - `PATCH /api/v1/console/session/{session}/station` → cambio de ventanilla.
   - `POST /api/v1/console/tickets/{ticket}/transfer` → transferencia con `section`, operadores y motivo.
-  - `POST /api/v1/console/tickets/{ticket}/reprint` → reimpresión con payload ESC/POS.
-  - `POST /api/v1/console/tickets/{ticket}/print-failed` → registro del fallo de impresión.
   - `GET /api/v1/console/queue` incluye `session` y `stations`; `GET /api/v1/display/snapshot` agrupa por `current_section_id`.
 - Frontend:
-  - Consola con apertura/cierre de sesión, selección de operador, sección y ventanilla, cambio de ventanilla, transferencia, reimpresión y selección de driver.
+  - Consola con apertura/cierre de sesión, selección de operador, sección y ventanilla, cambio de ventanilla y transferencia. La consola no imprime ni muestra configuración de impresoras.
   - App `display` en `/pantalla` con snapshot, reloj, llamados por sección, llamados anteriores y suscripción a Echo.
   - `TicketResource` expone `current_section`, `is_transferred` y el historial `transfers`.
 - Seeders `StationSeeder` (3 ventanillas por sección) y `DemoOperatorSeeder` (solo `APP_ENV=local`, usuario `operador@demo.local` / `password`).
@@ -826,7 +825,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 
 - Sigue sin autenticación ni autorización: la consola, las sesiones y la administración deben usarse solo en local hasta la Fase 4. Cualquier persona con acceso HTTP puede abrir una sesión indicando `operator_id`.
 - La pantalla `/pantalla` no reproduce audio ni anuncia por voz; el ring + TTS es Fase 5 (Q-10).
-- El servicio local de impresión sigue sin implementarse; los drivers `local` y `qz` ya existen y la reimpresión registra fallos, pero no hay reintentos ni fallback automático.
+- El servicio local de impresión sigue sin implementarse; los drivers `local` y `qz` existen y el quiosco usa la impresora configurada para su dispositivo, pero no hay reintentos ni fallback automático.
 - La transferencia no recalcula prioridad ni autoriza por rol; esas reglas llegan con la Fase 4.
 - Reverb sigue siendo `dev-main` y `BROADCAST_CONNECTION=log` por defecto; sin Reverb la pantalla y la consola usan polling cada 5 segundos.
 
@@ -865,7 +864,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
   - CRUD de perfiles de prioridad y de servicios con operadores autorizados.
   - `GET /api/v1/admin/operators` para asignar autorizaciones.
   - Simulador `POST /api/v1/admin/queue/simulate`.
-  - `TicketPolicy` para operar, transferir y reimprimir tickets de la sección de la sesión activa.
+  - `TicketPolicy` para operar y transferir tickets de la sección de la sesión activa.
 - Frontend:
   - Consola autenticada, sin selector de operador, con cierre de sesión y badges de preferencial/servicio.
   - Quiosco con bloque de servicios exclusivos disponibles.
@@ -887,7 +886,7 @@ Las preguntas no bloqueantes **Q-07 a Q-14** también quedaron resueltas en la s
 - [x] CRUD de secciones, ventanillas, operadores y servicios.
 - [x] Ajuste de la hora de cierre de jornada y retención de datos.
 - [x] Configuración de secciones habilitadas por quiosco.
-- [x] Configuración de impresoras y driver por dispositivo.
+- [x] Configuración de impresoras y driver por quiosco.
 - [x] Matriz de códigos editable y auditable.
 - [x] Contenidos multimedia, playlists y pantallas.
 - [x] Anuncio por voz con ring + TTS (código, número, ventanilla).
@@ -905,7 +904,7 @@ La fase se ejecutó en tres entregas:
 - CRUD de usuarios con roles y baja lógica; no se eliminan usuarios con historial.
 - Secciones editables (nombre, estado y orden) con bloqueo si tienen tickets activos.
 - Matriz código→categoría editable solo remapeando las categorías de los tres códigos existentes; se valida con `SectionMatrixValidator` y exige confirmación explícita.
-- CRUD de ventanillas por sección, quioscos con token y secciones habilitadas, e impresoras por ventanilla con driver `local` o `qz`.
+- CRUD de ventanillas por sección, quioscos con token y secciones habilitadas, e impresoras por quiosco con driver `local` o `qz`.
 - Endpoints `GET/PUT /api/v1/admin/sections`, `PUT /api/v1/admin/sections/{slug}/matrix`, `apiResource` de ventanillas, usuarios, quioscos y impresoras, y `GET /api/v1/admin/audit-logs`.
 - Paneles Vue: secciones, ventanillas, usuarios, quioscos, impresoras y auditoría.
 - Pruebas T-ADMIN (14 pruebas) y suite de **141 pruebas, 592 aserciones** al cierre de 5A.
@@ -1017,11 +1016,11 @@ quedan a cargo del equipo operativo, con los procedimientos ya documentados.
 - **Impresión:** emulador ESC/POS y pruebas de acentos.
 - **Resiliencia:** caída de Redis, Reverb e impresora.
 
-`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado al cierre de la Fase 6: **167 pruebas, 757 aserciones en verde**.
+`phpunit.xml` ya usa MySQL (`gestion_tickets_test`) con `LazilyRefreshDatabase`. Estado tras el cambio de impresión al quiosco (2026-11-09): **171 pruebas, 784 aserciones en verde**.
 
 - T-MAP: matriz código→categoría y bloqueo de secciones inválidas (19 pruebas).
 - T-SEQ: emisión, numeración, llamados, rellamados, transiciones, no-show y cierre de jornada.
-- T-OPS: sesiones de operador, ventanillas, cambio de ventanilla, transferencias, reimpresión, fallos de impresión, cierre de sesiones y aislamiento de ventanillas por sección.
+- T-OPS: sesiones de operador, ventanillas, cambio de ventanilla, transferencias, cierre de sesiones y aislamiento de ventanillas por sección.
 - T-PRIO: secuencia 2:1, aging en ambos sentidos, máximo de preferenciales consecutivos, snapshot y perfil fallback.
 - T-SVC: disponibilidad por día, horario y vigencia; código general y etiqueta; autorización por servicio; CRUD de administración y desactivación con historial.
 - T-AUTH: login/logout, credenciales inválidas, usuario inactivo, `401`/`403`, `auth/me` y protección de rutas web y API por rol.
@@ -1116,7 +1115,7 @@ No bloquean el arranque de la Fase 1, pero deben cerrarse antes de las fases ind
 | Transferencia (Q-11) | Resuelto en lo operativo en la Fase 3: la transfiere el operador que atiende, con motivo y operador de destino opcionales, y se conserva la prioridad original. La Fase 4 añadió la autorización por rol; como el perfil de prioridad es global, no hay recálculo por sección destino. | Resuelto (Fases 3 y 4) |
 | Retención (Q-09) | Implementado en 5B: 12 meses por defecto, configurable entre 1 y 120; `tickets:purge` archiva en CSV y elimina solo tickets terminales. La auditoría conserva su propio historial y no entra en la purga de tickets. | Resuelto (Fase 5B) |
 | Voz (Q-10) | Implementado en 5C con TTS del navegador (`es-BO`), timbre con Web Audio API y activación por gesto del usuario. No se usa servicio externo. | Resuelto (Fase 5C) |
-| Impresión (Q-14) | Formato del ticket, política de reintentos y fallback entre drivers, y autenticación del servicio local. El formato ESC/POS y los dos drivers están implementados; la Fase 3 añadió reimpresión y registro de fallos, pero quedan reintentos/fallback y la autenticación del servicio local. | Fase 4/5 |
+| Impresión (Q-14) | El formato ESC/POS y los dos drivers están implementados. La impresora se configura por quiosco y el quiosco recibe driver y destino al cargar. Quedan pendientes la política de reintentos/fallback y la autenticación del servicio local. | Parcialmente resuelto |
 
 ### 15.5 Operación de la Fase 3 (2026-11-06)
 
@@ -1127,7 +1126,7 @@ Decisiones adoptadas al implementar la operación, coherentes con el acta:
 - **Cambio de ventanilla:** se permite dentro de la misma sección, sin ticket activo, dejando historial en `station_assignments`.
 - **Transferencia:** la ejecuta el operador que atiende. Se permite desde `waiting` o `called`; un ticket `called` vuelve a `waiting`, se libera la asignación y `call_count` se reinicia a 0. Un ticket `in_service` no se transfiere. Se conservan código y número originales y se registra origen, destino, operadores, motivo y fecha.
 - **Cierre de jornada:** además de resolver los tickets, cierra las sesiones y asignaciones activas.
-- **Reimpresión y fallos:** se registran como eventos `reprinted` y `print_failed`; no cambian el estado del ticket. El reintento queda a cargo del operador.
+- **Impresión:** la impresora pertenece al quiosco y se configura en administración. La consola del operador no muestra impresoras, no permite reimprimir y no registra fallos de impresión. Si la impresora falla, el quiosco conserva el código en pantalla y el ticket sigue en la cola.
 - **Alcance sin autenticación:** la Fase 3 no añade login ni autorización. La consola y la administración siguen siendo de uso local hasta la Fase 4.
 
 ### 15.6 Prioridades, servicios y autenticación (Fase 4, 2026-11-06)
@@ -1142,7 +1141,7 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Autorización por servicio:** un operador solo puede llamar tickets de servicios para los que está autorizado. Los tickets sin servicio no requieren autorización. La autorización se administra por servicio desde la API de administración.
 - **Autenticación:** login propio por sesión, sin paquetes nuevos, con rate limiting. El usuario debe estar activo. Roles: administrador, supervisor y operador. La API usa la misma sesión y exige el token CSRF en las peticiones mutables.
 - **Protección de rutas:** quiosco y pantalla no exigen login; la consola exige sesión y rol admin/supervisor/operador; la administración exige rol admin. La emisión de tickets exige el token de un quiosco activo y el snapshot de pantalla es público (filtrado si recibe token de pantalla).
-- **Política de tickets:** operar, transferir y reimprimir exigen una sesión activa en la sección actual del ticket. Un administrador conserva acceso total por `Gate::before`, pero las acciones de consola siguen requiriendo sesión de operador.
+- **Política de tickets:** operar y transferir exigen una sesión activa en la sección actual del ticket. Un administrador conserva acceso total por `Gate::before`, pero las acciones de consola siguen requiriendo sesión de operador.
 - **Cierre de jornada:** sin cambios respecto de la Fase 3; las sesiones y asignaciones se cierran junto con los tickets.
 
 ### 15.7 Administración y auditoría (Fase 5A, 2026-11-06)
@@ -1152,7 +1151,7 @@ Decisiones adoptadas al implementar la Fase 4:
 - **Matriz:** solo se permite remapear las categorías de los tres códigos existentes. No se pueden crear códigos nuevos desde la interfaz; el cambio exige confirmación explícita y se valida con `SectionMatrixValidator`.
 - **Usuarios:** el alta y la edición usan `AdminUserRequest`; la baja es lógica (`is_active=false`) para conservar el historial de tickets y auditoría. Los operadores y supervisores declaran `default_section_id` y `default_station_id`; la ventanilla debe pertenecer a la sección y estar activa.
 - **Quioscos:** `kiosk_devices` guarda un token aleatorio de 48 caracteres y una lista de secciones activas. La URL pública es `/quiosco?quiosco={token}`. La emisión (`POST /api/v1/tickets`) exige ese token y que la sección solicitada esté habilitada para el quiosco.
-- **Impresoras:** cada impresora pertenece opcionalmente a una ventanilla y declara driver (`local` o `qz`), destino, ancho de papel y configuración adicional.
+- **Impresoras:** cada impresora pertenece opcionalmente a un quiosco y declara driver (`local` o `qz`), destino, ancho de papel y configuración adicional. El endpoint público `GET /api/v1/kiosks/{token}` expone la impresora activa del quiosco para que el frontend imprima con esa configuración; la consola no consume esta información. La migración desde el modelo anterior no intenta adivinar el quiosco: las impresoras existentes quedan sin quiosco y deben reasignarse en `/admin/impresoras`.
 - **Autorización:** todos los endpoints de administración exigen rol `admin`; la consola exige sesión y rol admin/supervisor/operador.
 
 ### 15.8 Reportes, exportaciones y retención (Fase 5B, 2026-11-06)
@@ -1194,7 +1193,7 @@ Decisiones adoptadas al implementar la Fase 4:
 5. ~~Escribir las pruebas T-MAP antes de habilitar cualquier sección.~~ Completado: 19 pruebas en verde.
 6. ~~Configurar la base de datos de pruebas en MySQL.~~ Completado: `gestion_tickets_test`.
 7. ~~Implementar la emisión, el llamado, la atención y el cierre de tickets (Fase 2).~~ Completado el 2026-11-06: 71 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/admin/ajustes` y API.
-8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado, transferencia, reimpresión y fallo de impresión.
+8. ~~Implementar ventanillas, sesiones de operador, transferencia entre secciones y pantalla de llamados (Fase 3).~~ Completado el 2026-11-06: 96 pruebas en verde y smoke test de `/quiosco`, `/consola`, `/pantalla`, `/admin/ajustes`, sesión, llamado y transferencia. La reimpresión desde la consola se retiró después al mover la impresión al quiosco.
 9. ~~Implementar prioridades configurables 2:1, aging, servicios exclusivos, autorización por servicio y autenticación (Fase 4).~~ Completado el 2026-11-06: 127 pruebas en verde (T-PRIO, T-SVC y T-AUTH) y smoke test de `/login`, `/quiosco`, `/pantalla`, `/consola`, `/admin/ajustes`, prioridades, servicios y simulador.
 10. ~~Implementar la Fase 5: administración completa, reportes, retención, multimedia y anuncio por voz.~~ Completado el 2026-11-06 en tres entregas: 5A (`f95d465`), 5B (`ebbcaea`) y 5C (multimedia, pantallas y voz). Suite final: 159 pruebas y 722 aserciones.
 11. ~~Iniciar la Fase 6: pruebas de carga, caos, seguridad, respaldos, runbooks y piloto en una sola sección.~~ Artefactos completados el 2026-11-06: escenarios k6, revisión de seguridad, scripts de respaldo, runbook, plan de UAT/piloto y comando `tickets:health`. **Pendiente de ejecución:** cargas en staging, simulacros de caos, ensayo de restauración, UAT y piloto real.
@@ -1211,7 +1210,7 @@ Decisiones adoptadas al implementar la Fase 4:
 | Laravel sigue usando SQLite | Configuración cacheada o `.env` incorrecto | `php artisan config:clear` |
 | Contenedor `unhealthy` | Inicialización lenta o error de arranque | `docker compose logs mysql` |
 | WebSocket no conecta | Reverb detenido o `BROADCAST_CONNECTION` distinto de `reverb` | Ejecutar `php artisan reverb:start` y ajustar `.env` |
-| La impresión falla | Servicio local no disponible o QZ Tray sin conexión | Revisar `VITE_PRINT_SERVICE_URL`, iniciar el servicio o QZ Tray |
+| La impresión falla | Impresora del quiosco mal configurada, servicio local no disponible o QZ Tray sin conexión | Revisar la impresora del quiosco en `/admin/impresoras`, el destino configurado o `VITE_PRINT_SERVICE_URL`, e iniciar el servicio o QZ Tray |
 | Las imágenes o videos no cargan | Falta el enlace simbólico del disco público | Ejecutar `php artisan storage:link` |
 | La pantalla no anuncia por voz | Audio bloqueado por el navegador o sin voz instalada | Pulsar “Activar audio”; revisar las voces del sistema operativo |
 | El enlace de la pantalla dejó de funcionar | Token regenerado desde administración | Copiar el enlace actualizado desde el panel de pantallas |
@@ -1229,4 +1228,4 @@ Decisiones adoptadas al implementar la Fase 4:
 
 ---
 
-**Nota final:** esta guía describe el estado real del repositorio al 2026-11-06. Las fases 1 a 5 están completadas; la Fase 6 tiene los artefactos de endurecimiento listos (cargas k6, revisión de seguridad, respaldos, runbook y plan de UAT/piloto) y el ensayo local de restauración verificado, pero **las pruebas de carga, los simulacros de caos, el ensayo de restauración en producción y el piloto aún no se ejecutaron**. La suite automatizada está en verde; no se ha validado el sistema en operación real ni con impresoras físicas. El quiosco y la pantalla no exigen login, pero el quiosco necesita su token para emitir. Cualquier avance debe reflejarse aquí, en `docs/seguridad.md`, `docs/runbook-operacion.md` y `docs/piloto-uat.md`.
+**Nota final:** esta guía describe el estado real del repositorio al 2026-11-09. Las fases 1 a 5 están completadas; la Fase 6 tiene los artefactos de endurecimiento listos (cargas k6, revisión de seguridad, respaldos, runbook y plan de UAT/piloto) y el ensayo local de restauración verificado, pero **las pruebas de carga, los simulacros de caos, el ensayo de restauración en producción y el piloto aún no se ejecutaron**. La suite automatizada está en verde; no se ha validado el sistema en operación real ni con impresoras físicas. El quiosco y la pantalla no exigen login, pero el quiosco necesita su token para emitir. Las impresoras se configuran por quiosco y la consola del operador no imprime. Cualquier avance debe reflejarse aquí, en `docs/seguridad.md`, `docs/runbook-operacion.md` y `docs/piloto-uat.md`.

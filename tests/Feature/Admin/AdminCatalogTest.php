@@ -419,16 +419,15 @@ class AdminCatalogTest extends TestCase
         $this->assertDatabaseMissing('kiosk_devices', ['id' => $created['id']]);
     }
 
-    public function test_admin_manages_printers_and_the_console_reads_them(): void
+    public function test_admin_manages_printers_and_the_kiosk_reads_them(): void
     {
         $this->seedMatrix();
         $admin = User::factory()->admin()->create();
-        $operator = User::factory()->create();
-        $station = $this->section('plataforma')->stations()->firstOrFail();
+        $kiosk = KioskDevice::factory()->create();
 
         $created = $this->actingAs($admin)
             ->postJson('/api/v1/admin/printers', [
-                'station_id' => $station->id,
+                'kiosk_device_id' => $kiosk->id,
                 'name' => 'EPSON TM-T20II',
                 'driver' => 'qz',
                 'target' => 'EPSON TM-T20II',
@@ -436,18 +435,17 @@ class AdminCatalogTest extends TestCase
                 'is_active' => true,
             ])
             ->assertCreated()
-            ->assertJsonPath('data.station.id', $station->id)
+            ->assertJsonPath('data.kiosk_device.id', $kiosk->id)
             ->json('data');
 
-        $this->actingAs($operator)
-            ->getJson("/api/v1/console/printers?station_id={$station->id}")
+        $this->getJson("/api/v1/kiosks/{$kiosk->token}")
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.driver', 'qz');
+            ->assertJsonPath('data.printer.driver', 'qz')
+            ->assertJsonPath('data.printer.target', 'EPSON TM-T20II');
 
         $this->actingAs($admin)
             ->putJson("/api/v1/admin/printers/{$created['id']}", [
-                'station_id' => $station->id,
+                'kiosk_device_id' => $kiosk->id,
                 'name' => 'EPSON TM-T20II',
                 'driver' => 'local',
                 'target' => 'http://127.0.0.1:9100',
@@ -458,11 +456,20 @@ class AdminCatalogTest extends TestCase
             ->assertJsonPath('data.driver', 'local')
             ->assertJsonPath('data.paper_width', 58);
 
+        $this->getJson("/api/v1/kiosks/{$kiosk->token}")
+            ->assertOk()
+            ->assertJsonPath('data.printer.driver', 'local')
+            ->assertJsonPath('data.printer.paper_width', 58);
+
         $this->actingAs($admin)
             ->deleteJson("/api/v1/admin/printers/{$created['id']}")
             ->assertOk();
 
         $this->assertDatabaseMissing('printers', ['id' => $created['id']]);
+
+        $this->getJson("/api/v1/kiosks/{$kiosk->token}")
+            ->assertOk()
+            ->assertJsonPath('data.printer', null);
     }
 
     public function test_audit_logs_can_be_filtered_and_paginated(): void

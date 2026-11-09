@@ -63,8 +63,8 @@ Registrar `OK`, `FALLA` u `OBSERVADO` y la evidencia (captura, ticket, log).
 | T-UAT-08 | Iniciar y finalizar | Pulsar “Iniciar” y luego “Finalizar” | Estados `in_service` y `finished`; tiempos registrados |
 | T-UAT-09 | No-show | Llamar dos veces y esperar 1 minuto | Pasa a `no_show` sin reencolar |
 | T-UAT-10 | Transferencia | Transferir un ticket `waiting` o `called` a otra sección | Conserva código y número; aparece en la sección destino |
-| T-UAT-11 | Reimpresión | Pulsar “Reimprimir” | Se imprime de nuevo; se registra el evento sin cambiar estado |
-| T-UAT-12 | Fallo de impresión | Simular impresora apagada y registrar fallo | Se registra `print_failed`; el ticket sigue visible |
+| T-UAT-11 | Impresión desde quiosco | Con la impresora del quiosco configurada, emitir un ticket | Se imprime con el driver y destino configurados; la consola no muestra controles de impresora |
+| T-UAT-12 | Fallo de impresión en quiosco | Simular impresora apagada y emitir un ticket | El quiosco muestra el aviso; el ticket sigue visible y la consola no ofrece reimprimir |
 | T-UAT-13 | Cierre de jornada | Ejecutar el cierre a la hora configurada | `waiting → expired`, `called → no_show`, `in_service → finished`; sesiones cerradas |
 | T-UAT-14 | Pantalla y audio | Abrir la pantalla con token, activar audio y llamar | Muestra solo las secciones asignadas; timbre y voz con código, número y ventanilla |
 | T-UAT-15 | Pantalla inactiva | Desactivar la pantalla y recargar | Responde 404 o deja de actualizar; el enlace no sirve |
@@ -86,7 +86,7 @@ Registrar `OK`, `FALLA` u `OBSERVADO` y la evidencia (captura, ticket, log).
 | Incidentes P1 (operación detenida) | 0 | Registro de incidentes |
 | Incidentes P2 (función degradada) | ≤ 2, resueltos en < 1 h | Registro |
 | Emisiones exitosas | ≥ 99 % | Logs y reportes |
-| Fallos de impresión | ≤ 2 % | Eventos `print_failed` |
+| Fallos de impresión | ≤ 2 % | Observación del piloto por quiosco; ya no se emite `print_failed` desde la consola |
 | No-show | ≤ 10 % | Reporte de tickets |
 | Espera promedio | Comparable al proceso manual | Reporte |
 | Latencia de pantalla | p95 < 1 s | k6 / monitoreo |

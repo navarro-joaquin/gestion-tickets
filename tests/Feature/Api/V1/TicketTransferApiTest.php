@@ -66,50 +66,6 @@ class TicketTransferApiTest extends TestCase
             ->assertJsonPath('data.1.waiting_count', 1);
     }
 
-    public function test_reprint_endpoint_returns_the_print_payload_and_records_an_event(): void
-    {
-        $this->seedMatrix();
-
-        $ticket = app(IssueTicket::class)->handle('plataforma', 'general');
-
-        $this->openSession('plataforma');
-
-        $response = $this->postJson("/api/v1/console/tickets/{$ticket->id}/reprint")
-            ->assertOk()
-            ->assertJsonPath('data.id', $ticket->id)
-            ->assertJsonPath('message', 'Ticket reimpreso.')
-            ->assertJsonStructure(['print' => ['escpos_base64', 'text']]);
-
-        $this->assertStringContainsString('A-001', (string) $response->json('print.text'));
-
-        $this->assertDatabaseHas('ticket_events', [
-            'ticket_id' => $ticket->id,
-            'type' => 'reprinted',
-        ]);
-    }
-
-    public function test_print_failure_endpoint_records_the_failure_without_changing_the_status(): void
-    {
-        $this->seedMatrix();
-
-        $ticket = app(IssueTicket::class)->handle('plataforma', 'general');
-
-        $this->openSession('plataforma');
-
-        $this->postJson("/api/v1/console/tickets/{$ticket->id}/print-failed", [
-            'message' => 'La impresora no responde',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'waiting')
-            ->assertJsonPath('message', 'Fallo de impresión registrado.');
-
-        $this->assertDatabaseHas('ticket_events', [
-            'ticket_id' => $ticket->id,
-            'type' => 'print_failed',
-        ]);
-        $this->assertSame('waiting', $ticket->fresh()->status->value);
-    }
-
     private function openSession(string $sectionSlug): User
     {
         $operator = User::factory()->create();

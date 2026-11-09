@@ -24,17 +24,12 @@ class PrinterResource extends JsonResource
             'paper_width' => $this->paper_width,
             'is_active' => $this->is_active,
             'config' => $this->config,
-            'station' => $this->whenLoaded(
-                'station',
-                fn (): ?array => $this->station === null ? null : [
-                    'id' => $this->station->id,
-                    'name' => $this->station->name,
-                    'section' => $this->station->relationLoaded('section') && $this->station->section !== null
-                        ? [
-                            'slug' => $this->station->section->slug,
-                            'name' => $this->station->section->name,
-                        ]
-                        : null,
+            'kiosk_device' => $this->whenLoaded(
+                'kioskDevice',
+                fn (): ?array => $this->kioskDevice === null ? null : [
+                    'id' => $this->kioskDevice->id,
+                    'name' => $this->kioskDevice->name,
+                    'slug' => $this->kioskDevice->slug,
                 ],
             ),
         ];
