@@ -41,6 +41,9 @@ const activeTicket = computed<Ticket | null>(() => queue.value?.active_ticket ??
 const waitingCount = computed<number>(() => queue.value?.waiting_count ?? 0);
 const currentStationName = computed<string>(() => session.value?.station?.name ?? '');
 const sessionStations = computed<Station[]>(() => queue.value?.stations ?? stations.value);
+const selectedSectionName = computed<string>(
+    () => sections.value.find((section) => section.slug === selectedSectionSlug.value)?.name ?? '',
+);
 
 const canRecall = computed<boolean>(
     () => activeTicket.value?.status === 'called' && activeTicket.value.call_count < 2,
@@ -286,6 +289,16 @@ async function closeSessionAndLogout(): Promise<void> {
     window.location.href = '/login';
 }
 
+async function logoutWithoutSession(): Promise<void> {
+    try {
+        await api.logout();
+    } catch {
+        // La redirección cierra la sesión del navegador de todos modos.
+    }
+
+    window.location.href = '/login';
+}
+
 async function changeStation(): Promise<void> {
     if (!session.value || !changeStationId.value || busy.value) {
         return;
@@ -471,13 +484,42 @@ function describeError(exception: unknown): string {
                 <p v-if="error" class="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {{ error }}
                 </p>
+
+                <div v-if="selectedSectionSlug" class="mt-6 text-left">
+                    <p class="text-sm text-slate-600">
+                        Sección: <span class="font-medium text-slate-900">{{ selectedSectionName }}</span>
+                    </p>
+
+                    <label class="mt-3 flex flex-col gap-2 text-sm font-medium text-slate-700">
+                        Ventanilla
+                        <select
+                            v-model="selectedStationId"
+                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                        >
+                            <option :value="null" disabled>Seleccione otra ventanilla</option>
+                            <option v-for="station in stations" :key="station.id" :value="station.id">
+                                {{ station.name }}
+                            </option>
+                        </select>
+                    </label>
+
+                    <button
+                        type="button"
+                        class="mt-4 w-full rounded-xl bg-accent-300 px-6 py-3 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        :disabled="busy"
+                        @click="openSession"
+                    >
+                        {{ busy ? 'Abriendo…' : 'Abrir jornada' }}
+                    </button>
+                </div>
+
                 <button
                     type="button"
-                    class="mt-6 rounded-xl bg-accent-300 px-6 py-3 font-semibold text-brand-950 transition hover:bg-accent-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                    class="mt-3 w-full rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                     :disabled="busy"
-                    @click="openSession"
+                    @click="logoutWithoutSession"
                 >
-                    Reintentar
+                    Cerrar sesión
                 </button>
             </template>
         </section>
