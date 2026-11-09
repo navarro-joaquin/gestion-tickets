@@ -375,16 +375,6 @@ async function transfer(): Promise<void> {
     }
 }
 
-async function logout(): Promise<void> {
-    try {
-        await api.logout();
-    } catch {
-        // La redirección a login es suficiente aunque la API falle.
-    }
-
-    window.location.href = '/login';
-}
-
 function describeError(exception: unknown): string {
     if (exception instanceof Error && 'status' in exception && exception.status === 401) {
         window.location.href = '/login';
@@ -398,7 +388,7 @@ function describeError(exception: unknown): string {
 
 <template>
     <main class="min-h-screen bg-brand-950 px-6 py-8 text-white">
-        <header class="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-6 border-b border-brand-800 pb-6">
+        <header class="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-6 border-b border-brand-700 pb-6">
             <div class="flex items-center gap-4">
                 <span class="rounded-2xl bg-white p-1.5">
                     <img :src="logoUrl" alt="CESSA" class="h-12 w-auto object-contain">
@@ -409,48 +399,34 @@ function describeError(exception: unknown): string {
                 </div>
             </div>
 
-            <div v-if="currentUser" class="flex flex-wrap items-center gap-3">
-                <div class="rounded-2xl border border-brand-800 bg-brand-900 px-4 py-2">
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Usuario</p>
-                    <p class="text-sm font-medium text-slate-100">{{ currentUser.name }}</p>
-                </div>
-                <button
-                    type="button"
-                    class="rounded-xl border border-brand-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-red-400 hover:text-red-200"
-                    @click="logout"
-                >
-                    Salir
-                </button>
-            </div>
-
             <div v-if="session" class="flex flex-wrap items-end gap-4">
-                <div class="rounded-2xl border border-brand-800 bg-brand-900 px-4 py-2">
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Operador</p>
-                    <p class="text-sm font-medium text-slate-100">{{ session.operator?.name }}</p>
+                <div class="rounded-2xl border border-brand-700 bg-brand-900 px-4 py-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-brand-300">Operador</p>
+                    <p class="text-sm font-medium text-brand-50">{{ session.operator?.name }}</p>
                 </div>
-                <div class="rounded-2xl border border-brand-800 bg-brand-900 px-4 py-2">
-                    <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Sección</p>
-                    <p class="text-sm font-medium text-slate-100">{{ session.section?.name }}</p>
+                <div class="rounded-2xl border border-brand-700 bg-brand-900 px-4 py-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-brand-300">Sección</p>
+                    <p class="text-sm font-medium text-brand-50">{{ session.section?.name }}</p>
                 </div>
             </div>
         </header>
 
-        <section v-if="!session" class="mx-auto mt-12 max-w-3xl rounded-3xl border border-brand-800 bg-brand-900 p-8">
+        <section v-if="!session" class="mx-auto mt-12 max-w-3xl rounded-3xl border border-brand-700 bg-brand-900 p-8">
             <h2 class="text-2xl font-semibold">Abrir jornada</h2>
-            <p class="mt-2 text-sm text-slate-400">
+            <p class="mt-2 text-sm text-brand-200">
                 El operador queda vinculado a una sola sección durante la jornada. La ventanilla puede
                 cambiarse después, dejando historial.
             </p>
-            <p class="mt-2 text-sm text-slate-500">
+            <p class="mt-2 text-sm text-brand-300">
                 Se cargan la sección y la ventanilla por defecto del operador; cámbielas solo si es necesario.
             </p>
 
             <div class="mt-8 grid gap-5 sm:grid-cols-2">
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-brand-100">
                     Sección
                     <select
                         v-model="selectedSectionSlug"
-                        class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-slate-100"
+                        class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-brand-50"
                         @change="onSectionChange"
                     >
                         <option v-for="section in sections" :key="section.slug" :value="section.slug">
@@ -459,11 +435,11 @@ function describeError(exception: unknown): string {
                     </select>
                 </label>
 
-                <label class="flex flex-col gap-2 text-sm text-slate-300">
+                <label class="flex flex-col gap-2 text-sm text-brand-100">
                     Ventanilla
                     <select
                         v-model="selectedStationId"
-                        class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-slate-100"
+                        class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-brand-50"
                     >
                         <option :value="null" disabled>Seleccione</option>
                         <option v-for="station in stations" :key="station.id" :value="station.id">
@@ -484,22 +460,22 @@ function describeError(exception: unknown): string {
         </section>
 
         <section v-else class="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[2fr_1fr]">
-            <div class="rounded-3xl border border-brand-800 bg-brand-900 p-8">
+            <div class="rounded-3xl border border-brand-700 bg-brand-900 p-8">
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h2 class="text-xl font-semibold">Ticket activo</h2>
-                        <p class="mt-1 text-sm text-slate-400">
-                            Ventanilla actual: <span class="text-slate-200">{{ currentStationName || 'sin asignar' }}</span>
+                        <p class="mt-1 text-sm text-brand-200">
+                            Ventanilla actual: <span class="text-brand-50">{{ currentStationName || 'sin asignar' }}</span>
                         </p>
                     </div>
-                    <span class="rounded-full bg-brand-800 px-4 py-1 text-sm text-slate-300">
+                    <span class="rounded-full bg-brand-800 px-4 py-1 text-sm text-brand-100">
                         {{ waitingCount }} en espera
                     </span>
                 </div>
 
                 <div v-if="activeTicket" class="mt-8">
                     <p class="text-7xl font-black tracking-tight">{{ activeTicket.label }}</p>
-                    <p class="mt-3 text-xl text-slate-300">
+                    <p class="mt-3 text-xl text-brand-100">
                         {{ activeTicket.service?.name ?? activeTicket.category?.name }}
                     </p>
                     <div class="mt-6 flex flex-wrap gap-3 text-sm">
@@ -518,10 +494,10 @@ function describeError(exception: unknown): string {
                         >
                             Servicio: {{ activeTicket.service.name }}
                         </span>
-                        <span class="rounded-full bg-brand-800 px-4 py-1 text-slate-300">
+                        <span class="rounded-full bg-brand-800 px-4 py-1 text-brand-100">
                             {{ activeTicket.call_count }} llamado(s)
                         </span>
-                        <span class="rounded-full bg-brand-800 px-4 py-1 text-slate-300">
+                        <span class="rounded-full bg-brand-800 px-4 py-1 text-brand-100">
                             {{ activeTicket.station_label }}
                         </span>
                         <span
@@ -533,7 +509,7 @@ function describeError(exception: unknown): string {
                     </div>
                 </div>
 
-                <div v-else class="mt-10 rounded-2xl border border-dashed border-brand-700 p-10 text-center text-slate-400">
+                <div v-else class="mt-10 rounded-2xl border border-dashed border-brand-700 p-10 text-center text-brand-200">
                     No hay un ticket activo en esta ventanilla.
                 </div>
 
@@ -549,7 +525,7 @@ function describeError(exception: unknown): string {
 
                     <button
                         type="button"
-                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-brand-50 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="busy || !canRecall"
                         @click="runAction('recall')"
                     >
@@ -558,7 +534,7 @@ function describeError(exception: unknown): string {
 
                     <button
                         type="button"
-                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-brand-50 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="busy || !canStart"
                         @click="runAction('start')"
                     >
@@ -567,7 +543,7 @@ function describeError(exception: unknown): string {
 
                     <button
                         type="button"
-                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-xl border border-brand-700 px-5 py-3 font-semibold text-brand-50 transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="busy || !canFinish"
                         @click="runAction('finish')"
                     >
@@ -577,12 +553,12 @@ function describeError(exception: unknown): string {
             </div>
 
             <aside class="space-y-4">
-                <div class="rounded-3xl border border-brand-800 bg-brand-900 p-6">
+                <div class="rounded-3xl border border-brand-700 bg-brand-900 p-6">
                     <h2 class="text-lg font-semibold">Ventanilla</h2>
                     <div class="mt-4 flex flex-col gap-3">
                         <select
                             v-model="changeStationId"
-                            class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-slate-100"
+                            class="rounded-xl border border-brand-700 bg-brand-950 px-4 py-3 text-brand-50"
                         >
                             <option v-for="station in sessionStations" :key="station.id" :value="station.id">
                                 {{ station.name }}
@@ -590,27 +566,27 @@ function describeError(exception: unknown): string {
                         </select>
                         <button
                             type="button"
-                            class="rounded-xl border border-brand-700 px-4 py-2 font-semibold text-slate-200 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-xl border border-brand-700 px-4 py-2 font-semibold text-brand-50 transition hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="busy || changeStationId === session.station?.id"
                             @click="changeStation"
                         >
                             Cambiar ventanilla
                         </button>
                     </div>
-                    <p class="mt-4 text-xs text-slate-500">
+                    <p class="mt-4 text-xs text-brand-300">
                         El cambio queda registrado en el historial de la sesión.
                     </p>
                 </div>
 
                 <div v-if="canTransfer" class="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6">
                     <h2 class="text-lg font-semibold text-amber-200">Transferir ticket</h2>
-                    <p class="mt-2 text-sm text-amber-100/70">
+                    <p class="mt-2 text-sm text-amber-100">
                         Se conserva el código y el número originales; cambia la sección que lo atiende.
                     </p>
                     <div class="mt-4 flex flex-col gap-3">
                         <select
                             v-model="transferSectionSlug"
-                            class="rounded-xl border border-amber-500/30 bg-brand-950 px-4 py-3 text-slate-100"
+                            class="rounded-xl border border-amber-500/30 bg-brand-950 px-4 py-3 text-brand-50"
                         >
                             <option value="">Sección de destino</option>
                             <option v-for="section in transferSections" :key="section.slug" :value="section.slug">
@@ -622,7 +598,7 @@ function describeError(exception: unknown): string {
                             type="text"
                             maxlength="255"
                             placeholder="Motivo (opcional)"
-                            class="rounded-xl border border-amber-500/30 bg-brand-950 px-4 py-3 text-slate-100 placeholder:text-brand-400"
+                            class="rounded-xl border border-amber-500/30 bg-brand-950 px-4 py-3 text-brand-50 placeholder:text-brand-400"
                         >
                         <button
                             type="button"
@@ -635,16 +611,16 @@ function describeError(exception: unknown): string {
                     </div>
                 </div>
 
-                <div class="rounded-3xl border border-brand-800 bg-brand-900 p-6">
+                <div class="rounded-3xl border border-brand-700 bg-brand-900 p-6">
                     <h2 class="text-lg font-semibold">Conexión</h2>
-                    <p class="mt-4 text-sm text-slate-500">
+                    <p class="mt-4 text-sm text-brand-300">
                         {{ echoClient ? 'Reverb configurado: los cambios se reciben en tiempo real.' : 'Sin Reverb: actualización cada 5 segundos.' }}
                     </p>
                 </div>
 
-                <div class="rounded-3xl border border-brand-800 bg-brand-900 p-6">
-                    <h2 class="text-lg font-semibold">Sesión</h2>
-                    <p class="mt-2 text-sm text-slate-400">
+                <div class="rounded-3xl border border-brand-700 bg-brand-900 p-6">
+                    <h2 class="text-lg font-semibold">Jornada</h2>
+                    <p class="mt-2 text-sm text-brand-200">
                         Abierta el {{ new Date(session.started_at).toLocaleString('es-BO') }}.
                     </p>
                     <button
@@ -653,7 +629,7 @@ function describeError(exception: unknown): string {
                         :disabled="busy"
                         @click="closeSession"
                     >
-                        Cerrar sesión
+                        Cerrar jornada
                     </button>
                 </div>
 
