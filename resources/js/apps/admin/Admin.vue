@@ -591,26 +591,10 @@ function describeError(exception: unknown): string {
 
         <div class="lg:pl-72">
             <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-                <header class="flex flex-wrap items-end justify-between gap-6 border-b border-slate-200 pb-6">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">Panel de administración</p>
-                        <h1 class="mt-2 text-3xl font-semibold text-slate-900">{{ activeTabMeta.label }}</h1>
-                        <p class="mt-1 text-sm text-slate-500">{{ activeTabMeta.description }}</p>
-                    </div>
-
-                    <div v-if="currentUser" class="flex flex-wrap items-center gap-3">
-                        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                            <p class="text-[11px] uppercase tracking-[0.2em] text-slate-400">Usuario</p>
-                            <p class="text-sm font-medium text-slate-800">{{ currentUser.name }} · {{ currentUser.role_label }}</p>
-                        </div>
-                        <button
-                            type="button"
-                            class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-red-300 hover:text-red-700"
-                            @click="logout"
-                        >
-                            Salir
-                        </button>
-                    </div>
+                <header class="border-b border-slate-200 pb-6">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">Panel de administración</p>
+                    <h1 class="mt-2 text-3xl font-semibold text-slate-900">{{ activeTabMeta.label }}</h1>
+                    <p class="mt-1 text-sm text-slate-500">{{ activeTabMeta.description }}</p>
                 </header>
 
                 <p v-if="message" class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
