@@ -104,6 +104,13 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_the_login_page_shows_an_expired_session_notice(): void
+    {
+        $this->get('/login?expired=1')
+            ->assertOk()
+            ->assertSee('Su sesión expiró. Inicie sesión nuevamente.');
+    }
+
     public function test_the_me_endpoint_requires_authentication(): void
     {
         $this->getJson('/api/v1/auth/me')->assertUnauthorized();

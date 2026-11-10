@@ -64,12 +64,26 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!response.ok) {
         const errors = (body?.errors ?? {}) as Record<string, string[]>;
         const firstError = Object.values(errors).flat()[0];
-        const message = firstError ?? body?.message ?? `Error HTTP ${response.status}`;
+        const message = response.status === 401
+            ? 'La sesión expiró. Inicie sesión nuevamente.'
+            : firstError ?? body?.message ?? `Error HTTP ${response.status}`;
+
+        if (response.status === 401) {
+            redirectToLogin();
+        }
 
         throw new ApiError(response.status, message, errors);
     }
 
     return body as T;
+}
+
+function redirectToLogin(): void {
+    if (window.location.pathname === '/login') {
+        return;
+    }
+
+    window.location.href = '/login?expired=1';
 }
 
 export const api = {

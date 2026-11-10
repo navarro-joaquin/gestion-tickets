@@ -30,6 +30,12 @@
             </div>
         @endif
 
+        @if (request()->boolean('expired'))
+            <div class="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                Su sesión expiró. Inicie sesión nuevamente.
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('login.store') }}" class="mt-8 space-y-5">
             @csrf
 

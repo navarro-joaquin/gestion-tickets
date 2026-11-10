@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api, type PriorityProfilePayload, type ServicePayload } from '../../shared/api/client';
 import AuditPanel from './components/AuditPanel.vue';
 import DisplaysPanel from './components/DisplaysPanel.vue';
@@ -150,7 +150,12 @@ const dayLabels: Array<{ value: number; label: string }> = [
     { value: 7, label: 'Dom' },
 ];
 
+const SESSION_CHECK_INTERVAL_MS = 60_000;
+let lastSessionCheck = Date.now();
+
 onMounted(async () => {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     await loadCurrentUser();
 
     if (!currentUser.value) {
@@ -165,6 +170,32 @@ onMounted(async () => {
         loadAdminOperators(),
     ]);
 });
+
+onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+});
+
+function handleVisibilityChange(): void {
+    if (document.visibilityState !== 'visible' || !currentUser.value) {
+        return;
+    }
+
+    if (Date.now() - lastSessionCheck < SESSION_CHECK_INTERVAL_MS) {
+        return;
+    }
+
+    lastSessionCheck = Date.now();
+
+    void validateSession();
+}
+
+async function validateSession(): Promise<void> {
+    try {
+        await api.me();
+    } catch {
+        // El cliente API redirige al login cuando la sesión expiró.
+    }
+}
 
 async function loadCurrentUser(): Promise<void> {
     try {
@@ -492,7 +523,7 @@ function nullable(value: string): string | null {
 
 function handleUnauthorized(exception: unknown): void {
     if (exception instanceof Error && 'status' in exception && exception.status === 401) {
-        window.location.href = '/login';
+        window.location.href = '/login?expired=1';
         return;
     }
 

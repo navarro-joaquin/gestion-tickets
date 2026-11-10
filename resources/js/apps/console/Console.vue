@@ -139,7 +139,7 @@ async function loadCurrentUser(): Promise<void> {
         currentUser.value = response.data;
     } catch (exception) {
         if (exception instanceof Error && 'status' in exception && exception.status === 401) {
-            window.location.href = '/login';
+            window.location.href = '/login?expired=1';
             return;
         }
 
@@ -437,7 +437,7 @@ async function transfer(): Promise<void> {
 
 function describeError(exception: unknown): string {
     if (exception instanceof Error && 'status' in exception && exception.status === 401) {
-        window.location.href = '/login';
+        window.location.href = '/login?expired=1';
 
         return 'La sesión expiró.';
     }
