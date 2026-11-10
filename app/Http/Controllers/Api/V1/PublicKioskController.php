@@ -17,7 +17,7 @@ class PublicKioskController extends Controller
 
         $sections = $kioskDevice->sections()
             ->where('sections.is_active', true)
-            ->with(['ticketCodes.categories', 'services'])
+            ->with(['ticketCodes.categories', 'services.category'])
             ->get();
 
         $printer = $kioskDevice->printers()

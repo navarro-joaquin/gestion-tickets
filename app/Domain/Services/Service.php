@@ -2,6 +2,7 @@
 
 namespace App\Domain\Services;
 
+use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 #[Fillable([
     'section_id',
+    'category_id',
     'slug',
     'name',
     'label',
@@ -53,6 +55,14 @@ class Service extends Model
     public function section(): BelongsTo
     {
         return $this->belongsTo(Section::class);
+    }
+
+    /**
+     * @return BelongsTo<Category, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 
     /**

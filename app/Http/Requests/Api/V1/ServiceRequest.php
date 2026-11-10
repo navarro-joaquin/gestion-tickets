@@ -38,7 +38,12 @@ class ServiceRequest extends FormRequest
                     ->ignore($serviceId),
             ],
             'name' => ['required', 'string', 'max:120'],
-            'label' => ['required', 'string', 'max:20'],
+            'category' => [
+                'nullable',
+                'string',
+                Rule::exists('categories', 'slug'),
+            ],
+            'label' => ['nullable', 'string', 'max:20'],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['required', 'boolean'],
             'available_days' => ['nullable', 'array'],

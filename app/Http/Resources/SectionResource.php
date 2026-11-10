@@ -51,6 +51,11 @@ class SectionResource extends JsonResource
                         'available_from' => $service->available_from,
                         'available_to' => $service->available_to,
                         'available_days' => $service->available_days,
+                        'category' => $service->category === null ? null : [
+                            'slug' => $service->category->slug,
+                            'name' => $service->category->name,
+                            'is_preferential' => $service->category->is_preferential,
+                        ],
                     ])
                     ->values()
                     ->all(),

@@ -10,6 +10,7 @@ use App\Domain\Ticketing\Actions\StartTicket;
 use App\Domain\Ticketing\Ticket;
 use App\Models\User;
 use Carbon\Carbon;
+use Database\Seeders\ServiceSeeder;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
@@ -40,6 +41,54 @@ class ServiceCatalogTest extends TestCase
         $this->assertSame($service->id, $ticket->service_id);
         $this->assertSame('general', $ticket->category->slug);
         $this->assertFalse($ticket->is_preferential);
+    }
+
+    public function test_a_service_with_a_preferential_category_uses_its_category_code(): void
+    {
+        $this->seedMatrix();
+        $moment = Carbon::parse('2026-11-09 09:00:00');
+
+        $this->createService([
+            'slug' => 'tercera-edad',
+            'name' => 'Tercera edad',
+            'label' => '',
+            'category_id' => $this->category('elderly')->id,
+        ]);
+
+        $ticket = app(IssueTicket::class)->handle('plataforma', null, 'tercera-edad', $moment);
+
+        $this->assertSame('B', $ticket->code);
+        $this->assertSame('B-001', $ticket->label);
+        $this->assertSame('', $ticket->service_label);
+        $this->assertSame('elderly', $ticket->category->slug);
+        $this->assertTrue($ticket->is_preferential);
+    }
+
+    public function test_the_service_seeder_registers_the_four_attention_options_per_section(): void
+    {
+        $this->seedMatrix();
+        $this->seed(ServiceSeeder::class);
+
+        $this->assertDatabaseCount('services', 12);
+
+        $general = Service::query()
+            ->where('section_id', $this->section('plataforma')->id)
+            ->where('slug', 'general')
+            ->sole();
+
+        $this->assertSame('general', $general->category->slug);
+        $this->assertSame('', $general->label);
+
+        $this->assertSame(
+            ['general', 'elderly', 'disability', 'pregnancy'],
+            Service::query()
+                ->where('section_id', $this->section('plataforma')->id)
+                ->orderBy('sort_order')
+                ->with('category')
+                ->get()
+                ->pluck('category.slug')
+                ->all(),
+        );
     }
 
     public function test_a_service_outside_its_day_or_time_window_is_rejected(): void
@@ -183,6 +232,7 @@ class ServiceCatalogTest extends TestCase
                 'section' => 'plataforma',
                 'slug' => 'visa',
                 'name' => 'Trámite de visa',
+                'category' => 'elderly',
                 'label' => 'VIS',
                 'is_active' => true,
                 'available_days' => [1, 2, 3],
@@ -193,6 +243,7 @@ class ServiceCatalogTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.slug', 'visa')
             ->assertJsonPath('data.section.slug', 'plataforma')
+            ->assertJsonPath('data.category.slug', 'elderly')
             ->assertJsonPath('data.operators.0.id', $operator->id)
             ->json('data');
 
@@ -211,6 +262,7 @@ class ServiceCatalogTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.label', 'VISA')
+            ->assertJsonPath('data.category.slug', 'elderly')
             ->assertJsonPath('data.operators', []);
 
         $this->assertDatabaseMissing('service_user', [

@@ -18,6 +18,7 @@ export interface ServiceSummary {
     available_from: string | null;
     available_to: string | null;
     available_days: number[] | null;
+    category: Category | null;
 }
 
 export interface Section {
@@ -298,6 +299,11 @@ export interface Service {
     effective_from: string | null;
     effective_to: string | null;
     sort_order: number;
+    category?: {
+        slug: string;
+        name: string;
+        is_preferential: boolean;
+    } | null;
     section?: {
         slug: string;
         name: string;

@@ -196,7 +196,9 @@ function reset(): void {
                     <span class="text-sm uppercase tracking-[0.2em] text-accent-300">Sección</span>
                     <span class="mt-4 block text-2xl font-semibold">{{ section.name }}</span>
                     <span class="mt-6 block text-lg text-slate-400">
-                        {{ section.codes.length }} tipos de atención
+                        {{ section.services.length > 0
+                            ? `${section.services.length} servicios disponibles`
+                            : `${section.codes.length} tipos de atención` }}
                     </span>
                 </button>
             </div>
@@ -215,7 +217,7 @@ function reset(): void {
 
             <div v-if="!ticket" class="mx-auto w-full max-w-5xl">
                 <div v-if="services.length > 0" class="mb-10">
-                    <h3 class="text-sm uppercase tracking-[0.25em] text-emerald-400">Servicios exclusivos</h3>
+                    <h3 class="text-sm uppercase tracking-[0.25em] text-emerald-400">Motivos de atención</h3>
                     <div class="mt-4 grid gap-4 md:grid-cols-2">
                         <button
                             v-for="service in services"
@@ -226,7 +228,7 @@ function reset(): void {
                             @click="issueService(service)"
                         >
                             <span class="text-sm uppercase tracking-[0.2em] text-emerald-400">
-                                Servicio · {{ service.label }}
+                                {{ service.category?.is_preferential ? 'Atención preferencial' : 'Atención general' }}
                             </span>
                             <span class="mt-3 block text-2xl font-semibold">{{ service.name }}</span>
                             <span v-if="service.description" class="mt-2 block text-sm text-slate-400">
@@ -236,22 +238,24 @@ function reset(): void {
                     </div>
                 </div>
 
-                <h3 class="text-sm uppercase tracking-[0.25em] text-accent-300">Atención por categoría</h3>
-                <div class="mt-4 grid gap-6 md:grid-cols-2">
-                    <button
-                        v-for="category in categories"
-                        :key="category.slug"
-                        type="button"
-                        class="rounded-3xl border border-brand-800 bg-brand-900 p-12 text-left transition hover:-translate-y-1 hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="busy"
-                        @click="issueCategory(category)"
-                    >
-                        <span class="text-sm uppercase tracking-[0.2em] text-accent-300">
-                            {{ category.is_preferential ? 'Atención preferencial' : 'Atención general' }}
-                        </span>
-                        <span class="mt-4 block text-3xl font-semibold">{{ category.name }}</span>
-                    </button>
-                </div>
+                <template v-else>
+                    <h3 class="text-sm uppercase tracking-[0.25em] text-accent-300">Atención por categoría</h3>
+                    <div class="mt-4 grid gap-6 md:grid-cols-2">
+                        <button
+                            v-for="category in categories"
+                            :key="category.slug"
+                            type="button"
+                            class="rounded-3xl border border-brand-800 bg-brand-900 p-12 text-left transition hover:-translate-y-1 hover:border-accent-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="busy"
+                            @click="issueCategory(category)"
+                        >
+                            <span class="text-sm uppercase tracking-[0.2em] text-accent-300">
+                                {{ category.is_preferential ? 'Atención preferencial' : 'Atención general' }}
+                            </span>
+                            <span class="mt-4 block text-3xl font-semibold">{{ category.name }}</span>
+                        </button>
+                    </div>
+                </template>
             </div>
 
             <div v-else class="mx-auto w-full max-w-3xl rounded-[2rem] border border-accent-300/50 bg-brand-900 p-14 text-center">

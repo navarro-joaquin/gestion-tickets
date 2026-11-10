@@ -37,6 +37,7 @@ interface ProfileForm {
 
 interface ServiceForm {
     section: string;
+    category: string;
     slug: string;
     name: string;
     label: string;
@@ -118,6 +119,25 @@ const adminOperators = ref<Operator[]>([]);
 const editingServiceId = ref<number | null>(null);
 const serviceForm = ref<ServiceForm>(emptyServiceForm());
 
+const serviceCategories: Array<{ slug: string; name: string; is_preferential: boolean }> = [
+    { slug: 'general', name: 'General', is_preferential: false },
+    { slug: 'elderly', name: 'Tercera edad', is_preferential: true },
+    { slug: 'disability', name: 'Discapacitados', is_preferential: true },
+    { slug: 'pregnancy', name: 'Embarazadas', is_preferential: true },
+];
+
+const serviceSections = computed<Section[]>(() => {
+    const registered = new Set(
+        services.value
+            .map((service) => service.section?.slug)
+            .filter((slug): slug is string => Boolean(slug)),
+    );
+
+    const matching = sections.value.filter((section) => registered.has(section.slug));
+
+    return matching.length > 0 ? matching : sections.value;
+});
+
 const simulatorForm = ref({
     general_count: 6,
     preferential_count: 3,
@@ -169,6 +189,8 @@ onMounted(async () => {
         loadSections(),
         loadAdminOperators(),
     ]);
+
+    syncServiceSection();
 });
 
 onBeforeUnmount(() => {
@@ -359,7 +381,8 @@ async function removeProfile(profile: PriorityProfile): Promise<void> {
 function editService(service: Service): void {
     editingServiceId.value = service.id;
     serviceForm.value = {
-        section: service.section?.slug ?? sections.value[0]?.slug ?? '',
+        section: service.section?.slug ?? serviceSections.value[0]?.slug ?? '',
+        category: service.category?.slug ?? 'general',
         slug: service.slug,
         name: service.name,
         label: service.label,
@@ -378,7 +401,15 @@ function editService(service: Service): void {
 
 function resetServiceForm(): void {
     editingServiceId.value = null;
-    serviceForm.value = emptyServiceForm(sections.value[0]?.slug ?? '');
+    serviceForm.value = emptyServiceForm(serviceSections.value[0]?.slug ?? '');
+}
+
+function syncServiceSection(): void {
+    if (serviceSections.value.some((section) => section.slug === serviceForm.value.section)) {
+        return;
+    }
+
+    serviceForm.value.section = serviceSections.value[0]?.slug ?? '';
 }
 
 function toggleDay(day: number): void {
@@ -402,6 +433,7 @@ async function saveService(): Promise<void> {
         section: serviceForm.value.section,
         slug: serviceForm.value.slug,
         name: serviceForm.value.name,
+        category: serviceForm.value.category || null,
         label: serviceForm.value.label,
         description: nullable(serviceForm.value.description),
         is_active: serviceForm.value.is_active,
@@ -422,8 +454,8 @@ async function saveService(): Promise<void> {
             : await api.createService(payload);
 
         message.value = response.message;
-        resetServiceForm();
         await loadServices();
+        resetServiceForm();
     } catch (exception) {
         error.value = describeError(exception);
     } finally {
@@ -502,6 +534,7 @@ function emptyProfileForm(): ProfileForm {
 function emptyServiceForm(section = ''): ServiceForm {
     return {
         section,
+        category: 'general',
         slug: '',
         name: '',
         label: '',
@@ -782,14 +815,23 @@ function describeError(exception: unknown): string {
                 <form class="rounded-3xl border border-slate-200 bg-white p-8" @submit.prevent="saveService">
                     <h2 class="text-xl font-semibold">{{ editingServiceId ? 'Editar servicio' : 'Nuevo servicio' }}</h2>
                     <p class="mt-2 text-sm text-slate-500">
-                        El servicio usa el código general de la sección y añade su etiqueta al número.
+                        El servicio usa el código de su categoría en la sección y, si tiene etiqueta, la añade al número.
                     </p>
 
                     <div class="mt-6 grid gap-4 md:grid-cols-2">
                         <label class="flex flex-col gap-2 text-sm text-slate-700">
                             Sección
                             <select v-model="serviceForm.section" required class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
-                                <option v-for="section in sections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
+                                <option v-for="section in serviceSections" :key="section.slug" :value="section.slug">{{ section.name }}</option>
+                            </select>
+                            <span class="text-xs text-slate-500">Solo se listan las secciones que ya tienen servicios registrados.</span>
+                        </label>
+                        <label class="flex flex-col gap-2 text-sm text-slate-700">
+                            Categoría
+                            <select v-model="serviceForm.category" required class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
+                                <option v-for="category in serviceCategories" :key="category.slug" :value="category.slug">
+                                    {{ category.name }} · {{ category.is_preferential ? 'preferencial' : 'general' }}
+                                </option>
                             </select>
                         </label>
                         <label class="flex flex-col gap-2 text-sm text-slate-700">
@@ -801,8 +843,8 @@ function describeError(exception: unknown): string {
                             <input v-model="serviceForm.name" required maxlength="120" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         </label>
                         <label class="flex flex-col gap-2 text-sm text-slate-700">
-                            Etiqueta del ticket
-                            <input v-model="serviceForm.label" required maxlength="20" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
+                            Etiqueta del ticket (opcional)
+                            <input v-model="serviceForm.label" maxlength="20" class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3">
                         </label>
                         <label class="flex flex-col gap-2 text-sm text-slate-700 md:col-span-2">
                             Descripción
@@ -880,7 +922,13 @@ function describeError(exception: unknown): string {
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold">{{ service.name }}</h3>
-                                <p class="text-sm text-slate-500">{{ service.section?.name }} · {{ service.label }}</p>
+                                <p class="text-sm text-slate-500">
+                                    {{ service.section?.name }} · {{ service.category?.name ?? 'Atención general' }}
+                                </p>
+                                <p class="text-xs text-slate-500">
+                                    {{ service.category?.is_preferential ? 'Prioridad preferencial' : 'Prioridad general' }}
+                                    <template v-if="service.label"> · Etiqueta {{ service.label }}</template>
+                                </p>
                             </div>
                             <span
                                 class="rounded-full px-3 py-1 text-xs font-semibold"

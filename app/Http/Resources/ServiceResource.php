@@ -31,6 +31,14 @@ class ServiceResource extends JsonResource
             'effective_from' => $this->effective_from?->toDateString(),
             'effective_to' => $this->effective_to?->toDateString(),
             'sort_order' => $this->sort_order,
+            'category' => $this->whenLoaded(
+                'category',
+                fn (): ?array => $this->category === null ? null : [
+                    'slug' => $this->category->slug,
+                    'name' => $this->category->name,
+                    'is_preferential' => $this->category->is_preferential,
+                ],
+            ),
             'section' => $this->whenLoaded(
                 'section',
                 fn (): array => [

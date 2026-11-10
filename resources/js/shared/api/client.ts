@@ -531,7 +531,8 @@ export interface ServicePayload {
     section: string;
     slug: string;
     name: string;
-    label: string;
+    category?: string | null;
+    label?: string | null;
     description?: string | null;
     is_active: boolean;
     available_days?: number[] | null;

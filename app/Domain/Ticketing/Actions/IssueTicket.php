@@ -77,7 +77,8 @@ final class IssueTicket
                     ]);
                 }
 
-                $category = Category::query()->where('slug', 'general')->first();
+                $category = $service->category
+                    ?? Category::query()->where('slug', 'general')->first();
             } else {
                 if ($categorySlug === null) {
                     throw ValidationException::withMessages([

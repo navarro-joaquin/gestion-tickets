@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Sections\Category;
 use App\Domain\Sections\Section;
 use App\Domain\Services\Service;
 use App\Domain\Ticketing\Ticket;
@@ -21,7 +22,7 @@ class ServiceController extends Controller
         ]);
 
         $services = Service::query()
-            ->with(['section', 'operators'])
+            ->with(['section', 'category', 'operators'])
             ->when(
                 ! empty($validated['section']),
                 fn ($query) => $query->whereHas(
@@ -39,13 +40,16 @@ class ServiceController extends Controller
 
     public function store(ServiceRequest $request): JsonResponse
     {
-        $service = Service::query()->create($this->payload($request));
+        $data = $this->payload($request);
+        $data['label'] ??= '';
+
+        $service = Service::query()->create($data);
 
         if ($request->has('operator_ids')) {
             $service->operators()->sync($request->validated('operator_ids') ?? []);
         }
 
-        $service->load(['section', 'operators']);
+        $service->load(['section', 'category', 'operators']);
 
         return response()->json([
             'data' => new ServiceResource($service),
@@ -61,7 +65,7 @@ class ServiceController extends Controller
             $service->operators()->sync($request->validated('operator_ids') ?? []);
         }
 
-        $service->load(['section', 'operators']);
+        $service->load(['section', 'category', 'operators']);
 
         return response()->json([
             'data' => new ServiceResource($service),
@@ -96,7 +100,17 @@ class ServiceController extends Controller
             ->firstOrFail();
 
         $data = $request->validated();
-        unset($data['section'], $data['operator_ids']);
+        unset($data['section'], $data['category'], $data['operator_ids']);
+
+        if (array_key_exists('label', $data)) {
+            $data['label'] ??= '';
+        }
+
+        if (array_key_exists('category', $request->validated())) {
+            $data['category_id'] = Category::query()
+                ->where('slug', $request->validated('category'))
+                ->value('id');
+        }
 
         $data['section_id'] = $section->id;
         $data['sort_order'] ??= 0;
