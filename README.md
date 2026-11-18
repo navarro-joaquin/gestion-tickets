@@ -1,58 +1,78 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Gestión de Tickets
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistema de turnos para la atención al público en tres secciones: Plataforma de Atención al Cliente, ODECO y Cajas. Emite tickets desde quioscos, los reparte entre ventanillas según prioridad y los anuncia en pantallas en tiempo real.
 
-## About Laravel
+## Aplicaciones
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Ruta | Uso | Acceso |
+|---|---|---|
+| `/quiosco?quiosco=<token>` | Emisión de tickets e impresión ESC/POS (QZ Tray) | Token de quiosco |
+| `/pantalla?pantalla=<token>` | Llamados, historial y multimedia | Público o token de pantalla |
+| `/consola` | Jornada del operador: llamar, rellamar, atender, finalizar y transferir | Admin, supervisor y operador |
+| `/admin` | Usuarios, secciones y matriz de códigos, ventanillas, quioscos, impresoras, pantallas, multimedia, prioridades, servicios, reportes, auditoría y ajustes | Admin |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+La API REST está en `/api/v1` ([routes/api.php](routes/api.php)).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Stack
 
-## Learning Laravel
+- PHP 8.4, Laravel 13, MySQL 8.4 LTS (Docker)
+- Vue 3 + TypeScript, Tailwind CSS 4, Vite 8
+- Laravel Reverb + Echo para el tiempo real; las pantallas y la consola también consultan periódicamente como respaldo
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Reglas principales
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Numeración diaria** por sección y código; se reinicia a las 00:00 (America/La_Paz).
+- **Prioridad:** reparto general/preferencial por ratio, con un tope de preferenciales seguidos y un "aging" que adelanta a quien espera demasiado. Cada decisión queda en `priority_snapshot`.
+- **No presentados:** tras los llamados y minutos configurados en *Admin → Ajustes* (por defecto, 2 llamados y 1 minuto).
+- **Cierre de jornada** a la hora configurada (por defecto 16:30): no se emiten más tickets, los que esperan expiran, los llamados pasan a no presentados y los que estaban en atención se finalizan. Las jornadas anteriores que hayan quedado abiertas se cierran automáticamente.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+Las decisiones de negocio están en [docs/decisiones-tickets-2026-11-06.md](docs/decisiones-tickets-2026-11-06.md).
 
-## Agentic Development
+## Puesta en marcha
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Requisitos: PHP 8.4, Composer 2, Docker Desktop, Node.js 22+ y npm. Herd es opcional (`http://gestion-tickets.test`).
 
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```powershell
+composer install
+npm install
+Copy-Item .env.example .env   # definir credenciales reales antes de levantar MySQL
+php artisan key:generate
+docker compose up -d
+php artisan migrate --seed
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Día a día:
 
-## Contributing
+```powershell
+docker compose up -d
+composer run dev              # servidor, Vite y procesos de desarrollo
+php artisan schedule:work     # no presentados, cierre de jornada y purga
+php artisan reverb:start      # tiempo real (BROADCAST_CONNECTION=reverb)
+php artisan queue:work        # exportaciones CSV
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Comandos
 
-## Code of Conduct
+| Comando | Qué hace |
+|---|---|
+| `tickets:no-show` | Cierra como no presentados los tickets que agotaron sus llamados (cada minuto) |
+| `tickets:day:close [--force]` | Cierra la jornada y las anteriores que quedaron abiertas (cada minuto) |
+| `tickets:purge` | Elimina el historial que supera la retención configurada (03:00) |
+| `tickets:codes:verify --strict` | Verifica que la matriz de códigos de cada sección sea válida |
+| `tickets:health` | Revisa el estado del sistema (cola de jobs, entre otros) |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Tests
 
-## Security Vulnerabilities
+```powershell
+php artisan test --compact
+npm run typecheck
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Los tests usan la base `gestion_tickets_test` en MySQL ([phpunit.xml](phpunit.xml)). Las pruebas de carga con k6 están en [tests/load](tests/load/README.md).
 
-## License
+## Documentación
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- [Guía de implementación](docs/guia-implementacion.md): arquitectura, modelo de datos y entorno
+- [Runbook de operación](docs/runbook-operacion.md): procesos, incidencias y recuperación
+- [Seguridad](docs/seguridad.md)
+- [Pruebas de caos](docs/pruebas-caos.md) y [piloto / UAT](docs/piloto-uat.md)

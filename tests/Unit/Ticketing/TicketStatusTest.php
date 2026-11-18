@@ -50,4 +50,14 @@ class TicketStatusTest extends TestCase
 
         $this->assertSame([TicketStatus::Called, TicketStatus::InService], $active);
     }
+
+    public function test_only_waiting_and_called_tickets_are_transferable(): void
+    {
+        $transferable = array_values(array_filter(
+            TicketStatus::cases(),
+            fn (TicketStatus $status): bool => $status->isTransferable(),
+        ));
+
+        $this->assertSame([TicketStatus::Waiting, TicketStatus::Called], $transferable);
+    }
 }
