@@ -14,6 +14,8 @@ use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
 
+use function Illuminate\Support\defer;
+
 #[Group('t-seq')]
 class TicketIssuanceTest extends TestCase
 {
@@ -147,6 +149,22 @@ class TicketIssuanceTest extends TestCase
             TicketQueueChanged::class,
             fn (TicketQueueChanged $event): bool => $event->sectionSlug === 'plataforma',
         );
+    }
+
+    public function test_queue_change_event_is_deferred_and_grouped_per_section(): void
+    {
+        $this->seedMatrix();
+        $this->withDefer();
+        Event::fake([TicketQueueChanged::class]);
+
+        app(IssueTicket::class)->handle('plataforma', 'general');
+        app(IssueTicket::class)->handle('plataforma', 'general');
+
+        Event::assertNotDispatched(TicketQueueChanged::class);
+
+        defer()->invoke();
+
+        Event::assertDispatchedTimes(TicketQueueChanged::class, 1);
     }
 
     public function test_issued_ticket_records_an_issued_event(): void

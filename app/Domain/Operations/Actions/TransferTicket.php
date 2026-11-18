@@ -43,7 +43,7 @@ final class TransferTicket
         ): array {
             $ticket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
-            if (! in_array($ticket->status, [TicketStatus::Waiting, TicketStatus::Called], true)) {
+            if (! $ticket->status->isTransferable()) {
                 throw ValidationException::withMessages([
                     'ticket' => ['Solo se puede transferir un ticket en espera o llamado.'],
                 ]);

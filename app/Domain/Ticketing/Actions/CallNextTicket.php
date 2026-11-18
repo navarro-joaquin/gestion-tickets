@@ -105,6 +105,12 @@ final class CallNextTicket
 
             $ticket = $selection->ticket;
 
+            if (! $ticket->status->canTransitionTo(TicketStatus::Called)) {
+                throw ValidationException::withMessages([
+                    'ticket' => ['El ticket seleccionado ya no está en espera.'],
+                ]);
+            }
+
             $ticket->update([
                 'status' => TicketStatus::Called,
                 'station_label' => $stationLabel,

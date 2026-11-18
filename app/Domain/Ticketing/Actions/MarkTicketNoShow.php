@@ -23,7 +23,7 @@ final class MarkTicketNoShow
         $ticket = DB::transaction(function () use ($ticket, $now): Ticket {
             $ticket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
-            if ($ticket->status !== TicketStatus::Called) {
+            if (! $ticket->status->canTransitionTo(TicketStatus::NoShow)) {
                 throw ValidationException::withMessages([
                     'ticket' => ['Solo se puede marcar como no presentado un ticket llamado.'],
                 ]);

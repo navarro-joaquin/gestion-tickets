@@ -36,6 +36,12 @@ enum TicketStatus: string
     }
 
     /**
+     * Transiciones que pueden provocar los operadores o el sistema dentro de una sección.
+     *
+     * No incluye volver a "en espera": el reencolado manual no está permitido. La única
+     * vía para que un ticket llamado regrese a la cola es una transferencia a otra
+     * sección (ver {@see self::isTransferable()}), que lo reencola en la sección destino.
+     *
      * @return list<self>
      */
     public function allowedTransitions(): array
@@ -51,5 +57,16 @@ enum TicketStatus: string
     public function canTransitionTo(self $target): bool
     {
         return in_array($target, $this->allowedTransitions(), true);
+    }
+
+    /**
+     * Indica si el ticket puede transferirse a otra sección.
+     *
+     * Un ticket en espera conserva su estado; uno llamado se libera de la ventanilla
+     * y vuelve a "en espera" en la sección destino.
+     */
+    public function isTransferable(): bool
+    {
+        return in_array($this, [self::Waiting, self::Called], true);
     }
 }
