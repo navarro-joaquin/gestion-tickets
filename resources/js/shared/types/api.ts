@@ -269,6 +269,8 @@ export interface AdminSettings {
     next_closing_at: string;
     timezone: string;
     retention_months: number;
+    no_show_calls: number;
+    no_show_minutes: number;
 }
 
 export interface PriorityProfile {

@@ -8,6 +8,7 @@ use App\Domain\Sections\Section;
 use App\Domain\Sections\SectionActivationGate;
 use App\Domain\Sections\SectionTicketCode;
 use App\Domain\Services\Service;
+use App\Domain\Settings\DayClosingSchedule;
 use App\Domain\Ticketing\QueueNotifier;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketEvent;
@@ -26,6 +27,7 @@ final class IssueTicket
         private readonly SectionActivationGate $gate,
         private readonly QueueNotifier $notifier,
         private readonly PriorityProfileResolver $profiles,
+        private readonly DayClosingSchedule $closingSchedule,
     ) {}
 
     public function handle(
@@ -51,6 +53,12 @@ final class IssueTicket
             if (! $this->gate->isOperational($section)) {
                 throw ValidationException::withMessages([
                     'section' => ['La sección no está operativa: la matriz debe estar confirmada y ser válida.'],
+                ]);
+            }
+
+            if ($this->closingSchedule->shouldCloseNow($now)) {
+                throw ValidationException::withMessages([
+                    'section' => ["La jornada ya cerró a las {$this->closingSchedule->closingTime()}. No se emiten más tickets hoy."],
                 ]);
             }
 

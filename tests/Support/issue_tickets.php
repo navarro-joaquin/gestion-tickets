@@ -13,7 +13,8 @@ $category = $argv[2] ?? 'general';
 $count = (int) ($argv[3] ?? 1);
 
 $action = $app->make(IssueTicket::class);
+$moment = now()->setTime(10, 0);
 
 for ($index = 0; $index < $count; $index++) {
-    echo $action->handle($section, $category)->label."\n";
+    echo $action->handle($section, $category, null, $moment)->label."\n";
 }

@@ -108,6 +108,8 @@ function selectTab(tab: Tab): void {
 const settings = ref<AdminSettings | null>(null);
 const closingTime = ref('16:30');
 const retentionMonths = ref(12);
+const noShowCalls = ref(2);
+const noShowMinutes = ref(1);
 
 const profiles = ref<PriorityProfile[]>([]);
 const editingProfileId = ref<number | null>(null);
@@ -234,6 +236,8 @@ async function loadSettings(): Promise<void> {
         settings.value = response.data;
         closingTime.value = response.data.closing_time;
         retentionMonths.value = response.data.retention_months;
+        noShowCalls.value = response.data.no_show_calls;
+        noShowMinutes.value = response.data.no_show_minutes;
     } catch (exception) {
         error.value = describeError(exception);
     }
@@ -289,10 +293,15 @@ async function saveSettings(): Promise<void> {
     error.value = '';
 
     try {
-        const response = await api.updateAdminSettings(closingTime.value, retentionMonths.value);
+        const response = await api.updateAdminSettings(closingTime.value, retentionMonths.value, {
+            calls: noShowCalls.value,
+            minutes: noShowMinutes.value,
+        });
         settings.value = response.data;
         closingTime.value = response.data.closing_time;
         retentionMonths.value = response.data.retention_months;
+        noShowCalls.value = response.data.no_show_calls;
+        noShowMinutes.value = response.data.no_show_minutes;
         message.value = response.message;
     } catch (exception) {
         error.value = describeError(exception);
@@ -694,6 +703,28 @@ function describeError(exception: unknown): string {
                             type="number"
                             min="1"
                             max="120"
+                            class="w-40 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-lg text-slate-900"
+                        >
+                    </label>
+
+                    <label class="flex flex-col gap-2 text-sm text-slate-700">
+                        Llamados antes de no presentado
+                        <input
+                            v-model.number="noShowCalls"
+                            type="number"
+                            min="1"
+                            max="10"
+                            class="w-40 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-lg text-slate-900"
+                        >
+                    </label>
+
+                    <label class="flex flex-col gap-2 text-sm text-slate-700">
+                        Minutos tras el último llamado
+                        <input
+                            v-model.number="noShowMinutes"
+                            type="number"
+                            min="1"
+                            max="60"
                             class="w-40 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-lg text-slate-900"
                         >
                     </label>
