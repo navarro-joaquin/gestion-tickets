@@ -9,6 +9,7 @@ use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketStatus;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
@@ -39,6 +40,34 @@ class TicketApiTest extends TestCase
         $this->assertIsString($payload);
         $this->assertStringContainsString('A-001', $payload);
         $this->assertStringContainsString('A-001', (string) $response->json('print.text'));
+    }
+
+    public function test_issue_endpoint_does_not_require_a_csrf_token_but_the_console_does(): void
+    {
+        $this->seedMatrix();
+        $this->enforceCsrfProtection();
+
+        $this->postJson('/api/v1/tickets', [
+            'kiosk' => $this->kioskFor('plataforma')->token,
+            'section' => 'plataforma',
+            'category' => 'general',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/console/tickets/next')->assertStatus(419);
+    }
+
+    /**
+     * Laravel omite la verificación CSRF al ejecutar tests; esto la reactiva.
+     */
+    private function enforceCsrfProtection(): void
+    {
+        $this->app->bind(ValidateCsrfToken::class, fn ($app): ValidateCsrfToken => new class($app, $app['encrypter']) extends ValidateCsrfToken
+        {
+            protected function runningUnitTests(): bool
+            {
+                return false;
+            }
+        });
     }
 
     public function test_issue_endpoint_validates_the_required_fields(): void

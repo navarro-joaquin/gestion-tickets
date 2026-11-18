@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\QueueSimulatorController;
 use App\Http\Controllers\Api\V1\SectionController;
 use App\Http\Controllers\Api\V1\ServiceController;
 use App\Http\Controllers\Api\V1\TicketController;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -30,8 +31,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('kiosks/{kioskDevice:token}', [PublicKioskController::class, 'show'])->name('kiosks.show');
     });
 
+    /*
+     * El quiosco se autentica con su token, no con la sesión: sin CSRF, una sesión
+     * caducada tras horas de inactividad no bloquea la emisión con un 419.
+     */
     Route::post('tickets', [TicketController::class, 'store'])
         ->middleware('throttle:public-tickets')
+        ->withoutMiddleware(PreventRequestForgery::class)
         ->name('tickets.store');
 
     Route::get('display/snapshot', [DisplayController::class, 'snapshot'])
