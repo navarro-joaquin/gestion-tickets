@@ -11,6 +11,8 @@ use App\Domain\Ticketing\TicketEventType;
 use App\Domain\Ticketing\TicketStatus;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 final class CloseTicketDay
@@ -18,26 +20,32 @@ final class CloseTicketDay
     public function __construct(private readonly QueueNotifier $notifier) {}
 
     /**
+     * Cierra la jornada actual y cualquier jornada anterior que haya quedado abierta.
+     *
+     * Con `$includeCurrentPeriod` en `false` solo se cierran los periodos anteriores
+     * a hoy (tickets, sesiones y asignaciones que no se cerraron a su hora).
+     *
      * @return array{expired: int, no_show: int, finished: int}
      */
-    public function handle(?CarbonInterface $moment = null): array
+    public function handle(?CarbonInterface $moment = null, bool $includeCurrentPeriod = true): array
     {
         $now = $moment ? Carbon::instance($moment) : now();
         $periodKey = $now->toDateString();
+        $periodOperator = $includeCurrentPeriod ? '<=' : '<';
         $affectedSections = [];
         $expired = 0;
         $noShow = 0;
         $finished = 0;
 
-        DB::transaction(function () use ($now, $periodKey, &$affectedSections, &$expired, &$noShow, &$finished): void {
-            $waitingTickets = Ticket::query()
-                ->where('status', TicketStatus::Waiting)
-                ->where('period_key', $periodKey)
+        DB::transaction(function () use ($now, $periodKey, $periodOperator, $includeCurrentPeriod, &$affectedSections, &$expired, &$noShow, &$finished): void {
+            $ticketsToClose = fn (TicketStatus $status): Collection => Ticket::query()
+                ->where('status', $status)
+                ->where('period_key', $periodOperator, $periodKey)
                 ->with(['section:id,slug', 'currentSection:id,slug'])
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($waitingTickets as $ticket) {
+            foreach ($ticketsToClose(TicketStatus::Waiting) as $ticket) {
                 $ticket->update([
                     'status' => TicketStatus::Expired,
                     'closed_at' => $now,
@@ -54,14 +62,7 @@ final class CloseTicketDay
                 $expired++;
             }
 
-            $calledTickets = Ticket::query()
-                ->where('status', TicketStatus::Called)
-                ->where('period_key', $periodKey)
-                ->with(['section:id,slug', 'currentSection:id,slug'])
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($calledTickets as $ticket) {
+            foreach ($ticketsToClose(TicketStatus::Called) as $ticket) {
                 $ticket->update([
                     'status' => TicketStatus::NoShow,
                     'closed_at' => $now,
@@ -85,14 +86,7 @@ final class CloseTicketDay
                 $noShow++;
             }
 
-            $inServiceTickets = Ticket::query()
-                ->where('status', TicketStatus::InService)
-                ->where('period_key', $periodKey)
-                ->with(['section:id,slug', 'currentSection:id,slug'])
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($inServiceTickets as $ticket) {
+            foreach ($ticketsToClose(TicketStatus::InService) as $ticket) {
                 $ticket->update([
                     'status' => TicketStatus::Finished,
                     'finished_at' => $now,
@@ -114,12 +108,16 @@ final class CloseTicketDay
                 $finished++;
             }
 
+            $startOfDay = $now->copy()->startOfDay();
+
             OperatorSession::query()
                 ->whereNull('ended_at')
+                ->unless($includeCurrentPeriod, fn (Builder $query): Builder => $query->where('started_at', '<', $startOfDay))
                 ->update(['ended_at' => $now]);
 
             StationAssignment::query()
                 ->whereNull('released_at')
+                ->unless($includeCurrentPeriod, fn (Builder $query): Builder => $query->where('assigned_at', '<', $startOfDay))
                 ->update(['released_at' => $now]);
         });
 

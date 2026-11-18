@@ -3,6 +3,7 @@
 namespace Tests\Feature\Ticketing;
 
 use App\Domain\Sections\Category;
+use App\Domain\Settings\DayClosingSchedule;
 use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Ticket;
 use App\Events\TicketQueueChanged;
@@ -55,8 +56,9 @@ class TicketIssuanceTest extends TestCase
     {
         $this->seedMatrix();
         $action = app(IssueTicket::class);
+        app(DayClosingSchedule::class)->setClosingTime('23:59');
 
-        $this->travelTo(Carbon::parse('2026-11-06 23:59:00'));
+        $this->travelTo(Carbon::parse('2026-11-06 23:58:00'));
         $beforeMidnight = $action->handle('plataforma', 'general');
 
         $this->travelTo(Carbon::parse('2026-11-07 00:01:00'));

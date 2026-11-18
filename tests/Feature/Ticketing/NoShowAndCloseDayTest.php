@@ -3,6 +3,7 @@
 namespace Tests\Feature\Ticketing;
 
 use App\Domain\Settings\DayClosingSchedule;
+use App\Domain\Settings\NoShowPolicy;
 use App\Domain\Ticketing\Actions\CallNextTicket;
 use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Actions\RecallTicket;
@@ -10,6 +11,7 @@ use App\Domain\Ticketing\Actions\StartTicket;
 use App\Domain\Ticketing\Ticket;
 use App\Domain\Ticketing\TicketStatus;
 use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Concerns\SeedsTicketMatrix;
 use Tests\TestCase;
@@ -113,18 +115,110 @@ class NoShowAndCloseDayTest extends TestCase
         ]);
     }
 
-    public function test_close_day_does_not_touch_tickets_from_another_period(): void
+    public function test_close_day_does_not_touch_tickets_from_a_future_period(): void
     {
         $this->seedMatrix();
 
-        $yesterdayTicket = Ticket::factory()->create([
-            'period_key' => now()->subDay()->toDateString(),
+        $tomorrowTicket = Ticket::factory()->create([
+            'period_key' => now()->addDay()->toDateString(),
             'status' => TicketStatus::Waiting,
         ]);
 
         $this->artisan('tickets:day:close', ['--force' => true])->assertExitCode(0);
 
-        $this->assertSame(TicketStatus::Waiting, $yesterdayTicket->fresh()->status);
+        $this->assertSame(TicketStatus::Waiting, $tomorrowTicket->fresh()->status);
+    }
+
+    public function test_close_day_command_closes_stale_tickets_from_previous_days_before_closing_time(): void
+    {
+        $this->seedMatrix();
+        $yesterday = now()->subDay()->setTime(11, 0);
+        $issue = app(IssueTicket::class);
+
+        $issue->handle('plataforma', 'general', null, $yesterday);
+        $staleInService = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1', null, $yesterday);
+        $staleInService = app(StartTicket::class)->handle($staleInService, $yesterday);
+        $staleWaiting = $issue->handle('plataforma', 'general', null, $yesterday);
+
+        $todayWaiting = $issue->handle('plataforma', 'general');
+
+        $this->artisan('tickets:day:close')->assertExitCode(0);
+
+        $this->assertSame(TicketStatus::Finished, $staleInService->fresh()->status);
+        $this->assertSame(TicketStatus::Expired, $staleWaiting->fresh()->status);
+        $this->assertSame(TicketStatus::Waiting, $todayWaiting->fresh()->status);
+
+        $called = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1');
+
+        $this->assertSame($todayWaiting->id, $called->id);
+    }
+
+    public function test_tickets_cannot_be_issued_after_the_closing_time(): void
+    {
+        $this->seedMatrix();
+
+        app(DayClosingSchedule::class)->setClosingTime('16:30');
+
+        $this->travelTo(now()->setTime(16, 30));
+
+        try {
+            app(IssueTicket::class)->handle('plataforma', 'general');
+            $this->fail('Se esperaba que la emisión fuera rechazada tras el cierre.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('section', $exception->errors());
+        }
+
+        $this->assertSame(0, Ticket::query()->count());
+    }
+
+    public function test_tickets_can_be_issued_right_before_the_closing_time(): void
+    {
+        $this->seedMatrix();
+
+        app(DayClosingSchedule::class)->setClosingTime('16:30');
+
+        $this->travelTo(now()->setTime(16, 29));
+
+        $ticket = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->assertSame(TicketStatus::Waiting, $ticket->status);
+    }
+
+    public function test_no_show_command_uses_the_configured_calls_and_minutes(): void
+    {
+        $this->seedMatrix();
+        $policy = app(NoShowPolicy::class);
+        $policy->setCalls(1);
+        $policy->setMinutes(5);
+
+        app(IssueTicket::class)->handle('plataforma', 'general');
+        $called = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1');
+
+        $this->travel(4)->minutes();
+        $this->artisan('tickets:no-show')->assertExitCode(0);
+        $this->assertSame(TicketStatus::Called, $called->fresh()->status);
+
+        $this->travel(1)->minutes();
+        $this->artisan('tickets:no-show')->assertExitCode(0);
+        $this->assertSame(TicketStatus::NoShow, $called->fresh()->status);
+    }
+
+    public function test_recall_respects_the_configured_maximum_calls(): void
+    {
+        $this->seedMatrix();
+        app(NoShowPolicy::class)->setCalls(3);
+
+        app(IssueTicket::class)->handle('plataforma', 'general');
+        $called = app(CallNextTicket::class)->handle('plataforma', 'Ventanilla 1');
+        $recall = app(RecallTicket::class);
+
+        $recall->handle($called);
+        $ticket = $recall->handle($called);
+
+        $this->assertSame(3, $ticket->fresh()->call_count);
+
+        $this->expectException(ValidationException::class);
+        $recall->handle($called);
     }
 
     public function test_close_day_waits_for_the_configured_time(): void
@@ -150,9 +244,11 @@ class NoShowAndCloseDayTest extends TestCase
         $schedule = app(DayClosingSchedule::class);
         $schedule->setClosingTime('18:00');
 
-        $this->travelTo(Carbon::parse('2026-11-06 18:00:00'));
+        $this->travelTo(Carbon::parse('2026-11-06 17:59:00'));
 
         $waiting = app(IssueTicket::class)->handle('plataforma', 'general');
+
+        $this->travelTo(Carbon::parse('2026-11-06 18:00:00'));
 
         $this->artisan('tickets:day:close')->assertExitCode(0);
 

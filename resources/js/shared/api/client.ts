@@ -199,12 +199,18 @@ export const api = {
         return request('/admin/settings');
     },
 
-    updateAdminSettings(closingTime: string, retentionMonths?: number): Promise<{ data: AdminSettings; message: string }> {
+    updateAdminSettings(
+        closingTime: string,
+        retentionMonths?: number,
+        noShow?: { calls: number; minutes: number },
+    ): Promise<{ data: AdminSettings; message: string }> {
         return request('/admin/settings', {
             method: 'PUT',
             body: JSON.stringify({
                 closing_time: closingTime,
                 retention_months: retentionMonths,
+                no_show_calls: noShow?.calls,
+                no_show_minutes: noShow?.minutes,
             }),
         });
     },

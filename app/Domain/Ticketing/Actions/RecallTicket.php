@@ -2,6 +2,7 @@
 
 namespace App\Domain\Ticketing\Actions;
 
+use App\Domain\Settings\NoShowPolicy;
 use App\Domain\Ticketing\AssignmentReason;
 use App\Domain\Ticketing\QueueNotifier;
 use App\Domain\Ticketing\Ticket;
@@ -16,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 final class RecallTicket
 {
-    public function __construct(private readonly QueueNotifier $notifier) {}
+    public function __construct(
+        private readonly QueueNotifier $notifier,
+        private readonly NoShowPolicy $noShowPolicy,
+    ) {}
 
     public function handle(Ticket $ticket, ?CarbonInterface $moment = null): Ticket
     {
@@ -31,9 +35,11 @@ final class RecallTicket
                 ]);
             }
 
-            if ($ticket->call_count >= 2) {
+            $maxCalls = $this->noShowPolicy->calls();
+
+            if ($ticket->call_count >= $maxCalls) {
                 throw ValidationException::withMessages([
-                    'ticket' => ['El ticket ya alcanzó el máximo de 2 llamados; se cerrará como no presentado.'],
+                    'ticket' => ["El ticket ya alcanzó el máximo de {$maxCalls} llamados; se cerrará como no presentado."],
                 ]);
             }
 
